@@ -1,3 +1,0 @@
-CREATE STAGE IF NOT EXISTS RISK_DB.RAW.POLICIES_STAGE
-    DIRECTORY = (ENABLE = TRUE)
-    COMMENT = 'Risk and compliance policy documents';
