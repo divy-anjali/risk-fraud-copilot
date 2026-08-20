@@ -254,3 +254,4 @@ CUSTOMER_MASTER (1)──┬──(N) ACCOUNT_MASTER
 ## Running Multiple Times
 
 Each call creates a new timestamped subfolder. The downstream ingestion pipeline (`LOAD_NEW_CSV_FILES`) uses `COPY INTO ... FORCE = FALSE`, which loads each file exactly once based on Snowflake's 64-day file metadata cache. Running the generator multiple times will produce new data batches that append to the raw tables with distinct `_SOURCE_FILE` values.
+
