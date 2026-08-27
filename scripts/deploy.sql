@@ -18,10 +18,11 @@
 -- !source raw/tables/table_deposit_balances.sql
 -- !source raw/tables/table_pep_list.sql
 -- !source raw/tables/table_sanctions_watchlist.sql
+-- !source raw/tables/table_policy_documents.sql
 
 -- 3. Raw layer - Procedures
 -- !source raw/procedures/stored_procedure_generate_risk_data.sql
--- !source raw/procedures/stored_procedure_load_new_csv_files.sql
+-- !source raw/procedures/stored_procedure_load_raw_data.sql
 
 -- 4. Raw layer - Streams
 -- !source raw/streams/stream_risk_data_stage.sql
