@@ -1,7 +1,8 @@
-CREATE OR REPLACE PROCEDURE RISK_DB.RAW.LOAD_NEW_CSV_FILES()
-RETURNS STRING
+CREATE OR REPLACE PROCEDURE RISK_DB.RAW.LOAD_RAW_DATA()
+RETURNS VARCHAR
 LANGUAGE SQL
-AS
+EXECUTE AS OWNER
+AS $$
 BEGIN
   -- Load CUSTOMER_MASTER
   COPY INTO RISK_DB.RAW.CUSTOMER_MASTER (
@@ -145,5 +146,40 @@ BEGIN
   ON_ERROR = 'CONTINUE'
   FORCE = FALSE;
 
-  RETURN 'CSV load completed successfully';
+  -- Parse PDF policy documents from POLICIES_STAGE and load into POLICY_DOCUMENTS
+  INSERT INTO RISK_DB.RAW.POLICY_DOCUMENTS (POLICY_NAME, CLASSIFICATION, GENERATED_DATE, PURPOSE, VIOLATIONS, FULL_CONTENT, _SOURCE_FILE, _LOADED_AT)
+  SELECT
+      REPLACE(SPLIT_PART(relative_path, '/', -1), '.pdf', '') AS POLICY_NAME,
+      TRIM(REGEXP_SUBSTR(parsed_content, 'Classification: ([A-Z]+)', 1, 1, 'e')) AS CLASSIFICATION,
+      TRIM(REGEXP_SUBSTR(parsed_content, 'Generated: ([0-9_]+)', 1, 1, 'e')) AS GENERATED_DATE,
+      TRIM(SUBSTR(parsed_content,
+          POSITION('## Purpose' IN parsed_content) + 11,
+          POSITION('##' IN SUBSTR(parsed_content, POSITION('## Purpose' IN parsed_content) + 11)) - 1
+      )) AS PURPOSE,
+      CASE WHEN POSITION('## Violations' IN parsed_content) > 0
+           THEN TRIM(SUBSTR(parsed_content, POSITION('## Violations' IN parsed_content) + 14))
+           ELSE NULL
+      END AS VIOLATIONS,
+      parsed_content AS FULL_CONTENT,
+      relative_path AS _SOURCE_FILE,
+      CURRENT_TIMESTAMP() AS _LOADED_AT
+  FROM (
+      SELECT
+          relative_path,
+          AI_PARSE_DOCUMENT(
+              TO_FILE('@RISK_DB.RAW.POLICIES_STAGE', relative_path),
+              {'mode': 'LAYOUT'}
+          ):content::STRING AS parsed_content
+      FROM DIRECTORY(@RISK_DB.RAW.POLICIES_STAGE)
+      WHERE relative_path ILIKE '%.pdf'
+        AND relative_path LIKE '%/%'
+        AND relative_path NOT LIKE '%/%/%'
+  )
+  WHERE NOT EXISTS (
+      SELECT 1 FROM RISK_DB.RAW.POLICY_DOCUMENTS pd
+      WHERE pd._SOURCE_FILE = relative_path
+  );
+
+  RETURN 'Raw data load completed successfully';
 END;
+$$;
