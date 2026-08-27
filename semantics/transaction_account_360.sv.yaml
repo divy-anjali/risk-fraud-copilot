@@ -1,0 +1,390 @@
+name: TRANSACTION_ACCOUNT_360
+description: Combines transaction activity with account and customer data to provide a 360-degree view. Supports analysis of transaction patterns, account utilization, customer segmentation, and deposit positions over time.
+tables:
+  - name: FCT_TRANSACTION
+    base_table:
+      database: RISK_DB
+      schema: CURATED
+      table: FCT_TRANSACTION
+    dimensions:
+      - name: TRANSACTION_ID
+        expr: TRANSACTION_ID
+        data_type: VARCHAR
+      - name: DIM_ACCOUNT_SK
+        expr: DIM_ACCOUNT_SK
+        data_type: NUMBER
+      - name: DIM_CUSTOMER_SK
+        expr: DIM_CUSTOMER_SK
+        data_type: NUMBER
+      - name: TRANSACTION_TIME
+        expr: TRANSACTION_TIME
+        data_type: VARCHAR
+      - name: TRANSACTION_TYPE
+        expr: TRANSACTION_TYPE
+        data_type: VARCHAR
+        description: 'Type of transaction: TRANSFER, PAYMENT, DEPOSIT, WITHDRAWAL, or FX.'
+      - name: AMOUNT
+        expr: AMOUNT
+        data_type: NUMBER
+        description: Transaction amount in the transaction currency.
+      - name: CURRENCY
+        expr: CURRENCY
+        data_type: VARCHAR
+      - name: DIRECTION
+        expr: DIRECTION
+        data_type: VARCHAR
+        description: 'Direction of fund flow: INBOUND (credit) or OUTBOUND (debit).'
+      - name: CHANNEL
+        expr: CHANNEL
+        data_type: VARCHAR
+        description: 'Transaction channel: BRANCH, ONLINE, ATM, MOBILE, or WIRE.'
+      - name: ORIGINATOR_NAME
+        expr: ORIGINATOR_NAME
+        data_type: VARCHAR
+      - name: ORIGINATOR_COUNTRY
+        expr: ORIGINATOR_COUNTRY
+        data_type: VARCHAR
+      - name: BENEFICIARY_NAME
+        expr: BENEFICIARY_NAME
+        data_type: VARCHAR
+      - name: BENEFICIARY_COUNTRY
+        expr: BENEFICIARY_COUNTRY
+        data_type: VARCHAR
+      - name: PURPOSE_CODE
+        expr: PURPOSE_CODE
+        data_type: VARCHAR
+      - name: HAS_AML_FLAG
+        expr: HAS_AML_FLAG
+        data_type: BOOLEAN
+      - name: RISK_SCORE
+        expr: RISK_SCORE
+        data_type: NUMBER
+      - name: IS_CASH
+        expr: IS_CASH
+        data_type: BOOLEAN
+      - name: IS_CROSS_BORDER
+        expr: IS_CROSS_BORDER
+        data_type: BOOLEAN
+      - name: IS_LARGE_TRANSACTION
+        expr: IS_LARGE_TRANSACTION
+        data_type: BOOLEAN
+      - name: TRANSACTION_DATE_SK
+        expr: TRANSACTION_DATE_SK
+        data_type: NUMBER
+    time_dimensions:
+      - name: TRANSACTION_DATE
+        expr: TRANSACTION_DATE
+        data_type: DATE
+      - name: TRANSACTION_TIMESTAMP
+        expr: TRANSACTION_TIMESTAMP
+        data_type: TIMESTAMP_NTZ
+    description: Records individual financial transactions at the transaction level. Each row represents one completed transaction with amount, channel, direction, and risk indicators.
+    metrics:
+      - name: TOTAL_AMOUNT
+        description: Total transaction amount.
+        expr: SUM(AMOUNT)
+      - name: TRANSACTION_COUNT
+        description: Count of transactions.
+        expr: COUNT(TRANSACTION_ID)
+      - name: AVG_AMOUNT
+        description: Average transaction amount.
+        expr: AVG(AMOUNT)
+  - name: DIM_ACCOUNT
+    base_table:
+      database: RISK_DB
+      schema: CURATED
+      table: DIM_ACCOUNT
+    primary_key:
+      columns:
+        - DIM_ACCOUNT_SK
+    dimensions:
+      - name: DIM_ACCOUNT_SK
+        expr: DIM_ACCOUNT_SK
+        data_type: NUMBER
+      - name: ACCOUNT_ID
+        expr: ACCOUNT_ID
+        data_type: VARCHAR
+      - name: CUSTOMER_ID
+        expr: CUSTOMER_ID
+        data_type: VARCHAR
+      - name: ACCOUNT_TYPE
+        expr: ACCOUNT_TYPE
+        data_type: VARCHAR
+        description: 'Account classification: CHECKING, SAVINGS, INVESTMENT, or LOAN.'
+      - name: CURRENCY
+        expr: CURRENCY
+        data_type: VARCHAR
+      - name: STATUS
+        expr: STATUS
+        data_type: VARCHAR
+      - name: BRANCH_CODE
+        expr: BRANCH_CODE
+        data_type: VARCHAR
+      - name: COUNTRY
+        expr: COUNTRY
+        data_type: VARCHAR
+      - name: BALANCE
+        expr: BALANCE
+        data_type: NUMBER
+      - name: CREDIT_LIMIT
+        expr: CREDIT_LIMIT
+        data_type: NUMBER
+      - name: OVERDRAFT_LIMIT
+        expr: OVERDRAFT_LIMIT
+        data_type: NUMBER
+      - name: RISK_SCORE
+        expr: RISK_SCORE
+        data_type: NUMBER
+      - name: DAYS_SINCE_LAST_ACTIVITY
+        expr: DAYS_SINCE_LAST_ACTIVITY
+        data_type: NUMBER
+      - name: IS_DORMANT
+        expr: IS_DORMANT
+        data_type: BOOLEAN
+        description: True if the account has had no activity beyond the dormancy threshold.
+      - name: IS_OVERDRAWN
+        expr: IS_OVERDRAWN
+        data_type: BOOLEAN
+        description: True when account balance is negative or exceeds the overdraft limit.
+      - name: IS_CURRENT
+        expr: IS_CURRENT
+        data_type: BOOLEAN
+    time_dimensions:
+      - name: OPENING_DATE
+        expr: OPENING_DATE
+        data_type: DATE
+      - name: LAST_ACTIVITY_DATE
+        expr: LAST_ACTIVITY_DATE
+        data_type: DATE
+    description: Account dimension with balance, credit limits, and activity status. Each row represents one bank account linked to a customer.
+    metrics:
+      - name: TOTAL_BALANCE
+        description: Total account balance.
+        expr: SUM(BALANCE)
+      - name: ACCOUNT_COUNT
+        description: Count of accounts.
+        expr: COUNT(ACCOUNT_ID)
+  - name: DIM_CUSTOMER
+    base_table:
+      database: RISK_DB
+      schema: CURATED
+      table: DIM_CUSTOMER
+    primary_key:
+      columns:
+        - CUSTOMER_ID
+    dimensions:
+      - name: DIM_CUSTOMER_SK
+        expr: DIM_CUSTOMER_SK
+        data_type: NUMBER
+      - name: CUSTOMER_ID
+        expr: CUSTOMER_ID
+        data_type: VARCHAR
+      - name: FULL_NAME
+        expr: FULL_NAME
+        data_type: VARCHAR
+      - name: NATIONALITY
+        expr: NATIONALITY
+        data_type: VARCHAR
+      - name: COUNTRY_OF_RESIDENCE
+        expr: COUNTRY_OF_RESIDENCE
+        data_type: VARCHAR
+      - name: CUSTOMER_TYPE
+        expr: CUSTOMER_TYPE
+        data_type: VARCHAR
+        description: 'Customer classification: INDIVIDUAL or CORPORATE.'
+      - name: INDUSTRY
+        expr: INDUSTRY
+        data_type: VARCHAR
+      - name: RISK_RATING
+        expr: RISK_RATING
+        data_type: VARCHAR
+        description: 'Customer risk classification: LOW, MEDIUM, HIGH, or VERY HIGH.'
+      - name: KYC_STATUS
+        expr: KYC_STATUS
+        data_type: VARCHAR
+      - name: PEP_FLAG
+        expr: PEP_FLAG
+        data_type: BOOLEAN
+      - name: SANCTIONS_MATCH_FLAG
+        expr: SANCTIONS_MATCH_FLAG
+        data_type: BOOLEAN
+      - name: ANNUAL_INCOME
+        expr: ANNUAL_INCOME
+        data_type: NUMBER
+      - name: SOURCE_OF_FUNDS
+        expr: SOURCE_OF_FUNDS
+        data_type: VARCHAR
+      - name: IS_HIGH_RISK
+        expr: IS_HIGH_RISK
+        data_type: BOOLEAN
+      - name: IS_CURRENT
+        expr: IS_CURRENT
+        data_type: BOOLEAN
+    time_dimensions:
+      - name: ONBOARDING_DATE
+        expr: ONBOARDING_DATE
+        data_type: DATE
+    unique_keys:
+      - columns:
+          - DIM_CUSTOMER_SK
+    description: Customer master dimension with risk ratings and KYC status. Each row represents one customer with their demographic and risk profile.
+  - name: FCT_DEPOSIT_BALANCE
+    base_table:
+      database: RISK_DB
+      schema: CURATED
+      table: FCT_DEPOSIT_BALANCE
+    primary_key:
+      columns:
+        - DIM_ACCOUNT_SK
+    dimensions:
+      - name: DEPOSIT_ID
+        expr: DEPOSIT_ID
+        data_type: VARCHAR
+      - name: DIM_ACCOUNT_SK
+        expr: DIM_ACCOUNT_SK
+        data_type: NUMBER
+      - name: DIM_CUSTOMER_SK
+        expr: DIM_CUSTOMER_SK
+        data_type: NUMBER
+      - name: DEPOSIT_TYPE
+        expr: DEPOSIT_TYPE
+        data_type: VARCHAR
+      - name: BALANCE
+        expr: BALANCE
+        data_type: NUMBER
+      - name: CURRENCY
+        expr: CURRENCY
+        data_type: VARCHAR
+      - name: INTEREST_RATE
+        expr: INTEREST_RATE
+        data_type: NUMBER
+      - name: INSURED_AMOUNT
+        expr: INSURED_AMOUNT
+        data_type: NUMBER
+      - name: UNINSURED_AMOUNT
+        expr: UNINSURED_AMOUNT
+        data_type: NUMBER
+      - name: HAS_CONCENTRATION_RISK
+        expr: HAS_CONCENTRATION_RISK
+        data_type: BOOLEAN
+        description: True when the deposit represents a disproportionate share of total funding.
+      - name: IS_LARGE_DEPOSIT
+        expr: IS_LARGE_DEPOSIT
+        data_type: BOOLEAN
+        description: True when the deposit exceeds the large deposit threshold for concentration risk.
+      - name: DEPOSIT_TERM_DAYS
+        expr: DEPOSIT_TERM_DAYS
+        data_type: NUMBER
+    time_dimensions:
+      - name: EFFECTIVE_DATE
+        expr: EFFECTIVE_DATE
+        data_type: DATE
+      - name: MATURITY_DATE
+        expr: MATURITY_DATE
+        data_type: DATE
+    description: Deposit balance positions with insurance coverage details. Each row represents one deposit with insured/uninsured breakdown and concentration risk flags.
+    metrics:
+      - name: TOTAL_DEPOSIT_BALANCE
+        description: Total deposit balance.
+        expr: SUM(BALANCE)
+      - name: TOTAL_INSURED
+        description: Total insured deposit amount.
+        expr: SUM(INSURED_AMOUNT)
+  - name: DIM_DATE
+    base_table:
+      database: RISK_DB
+      schema: CURATED
+      table: DIM_DATE
+    primary_key:
+      columns:
+        - DATE_SK
+    dimensions:
+      - name: DATE_SK
+        expr: DATE_SK
+        data_type: NUMBER
+      - name: YEAR
+        expr: YEAR
+        data_type: NUMBER
+      - name: QUARTER
+        expr: QUARTER
+        data_type: NUMBER
+      - name: MONTH
+        expr: MONTH
+        data_type: NUMBER
+      - name: DAY_OF_MONTH
+        expr: DAY_OF_MONTH
+        data_type: NUMBER
+      - name: DAY_OF_WEEK
+        expr: DAY_OF_WEEK
+        data_type: NUMBER
+      - name: YEAR_QUARTER
+        expr: YEAR_QUARTER
+        data_type: VARCHAR
+      - name: YEAR_MONTH
+        expr: YEAR_MONTH
+        data_type: VARCHAR
+      - name: DAY_NAME
+        expr: DAY_NAME
+        data_type: VARCHAR
+      - name: MONTH_NAME
+        expr: MONTH_NAME
+        data_type: VARCHAR
+      - name: IS_WEEKEND
+        expr: IS_WEEKEND
+        data_type: BOOLEAN
+      - name: IS_WEEKDAY
+        expr: IS_WEEKDAY
+        data_type: BOOLEAN
+    time_dimensions:
+      - name: FULL_DATE
+        expr: FULL_DATE
+        data_type: DATE
+    description: Calendar date dimension for time-series analysis. Each row represents one calendar date with fiscal periods, weekday indicators, and month/quarter attributes.
+relationships:
+  - name: DIM_ACCOUNT_TO_DIM_CUSTOMER
+    left_table: DIM_ACCOUNT
+    right_table: DIM_CUSTOMER
+    join_type: inner
+    relationship_type: many_to_one
+    relationship_columns:
+      - left_column: CUSTOMER_ID
+        right_column: CUSTOMER_ID
+  - name: FCT_TRANSACTION_TO_DIM_ACCOUNT
+    left_table: FCT_TRANSACTION
+    right_table: DIM_ACCOUNT
+    join_type: inner
+    relationship_type: many_to_one
+    relationship_columns:
+      - left_column: DIM_ACCOUNT_SK
+        right_column: DIM_ACCOUNT_SK
+  - name: FCT_TRANSACTION_TO_DIM_DATE
+    left_table: FCT_TRANSACTION
+    right_table: DIM_DATE
+    join_type: inner
+    relationship_type: many_to_one
+    relationship_columns:
+      - left_column: TRANSACTION_DATE_SK
+        right_column: DATE_SK
+  - name: FCT_DEPOSIT_BALANCE_TO_DIM_ACCOUNT
+    left_table: FCT_DEPOSIT_BALANCE
+    right_table: DIM_ACCOUNT
+    join_type: inner
+    relationship_columns:
+      - left_column: DIM_ACCOUNT_SK
+        right_column: DIM_ACCOUNT_SK
+verified_queries:
+  - name: 0;1
+    question: What is the transaction volume and average amount by account type?
+    sql: SELECT a.ACCOUNT_TYPE, COUNT(DISTINCT t.TRANSACTION_ID) AS txn_count, SUM(t.AMOUNT) AS total_volume, AVG(t.AMOUNT) AS avg_amount FROM fct_transaction AS t JOIN dim_account AS a ON t.DIM_ACCOUNT_SK = a.DIM_ACCOUNT_SK WHERE a.IS_CURRENT = TRUE GROUP BY a.ACCOUNT_TYPE
+    verified_at: 1787803919
+    verified_by: Semantic Model Generator
+  - name: 1;1
+    question: What is the total account balance and number of accounts by customer type and risk rating?
+    sql: SELECT c.CUSTOMER_TYPE, c.RISK_RATING, COUNT(DISTINCT a.ACCOUNT_ID) AS account_count, SUM(a.BALANCE) AS total_balance FROM dim_customer AS c JOIN dim_account AS a ON c.CUSTOMER_ID = a.CUSTOMER_ID WHERE c.IS_CURRENT = TRUE AND a.IS_CURRENT = TRUE GROUP BY c.CUSTOMER_TYPE, c.RISK_RATING
+    verified_at: 1787803919
+    verified_by: Semantic Model Generator
+  - name: 2;1
+    question: What are the monthly transaction trends by channel?
+    sql: SELECT d.YEAR_MONTH, t.CHANNEL, COUNT(*) AS txn_count, SUM(t.AMOUNT) AS total_amount FROM fct_transaction AS t JOIN dim_date AS d ON t.TRANSACTION_DATE_SK = d.DATE_SK GROUP BY d.YEAR_MONTH, t.CHANNEL ORDER BY d.YEAR_MONTH
+    verified_at: 1787803919
+    verified_by: Semantic Model Generator
