@@ -78,39 +78,14 @@ Follow these steps **in exact order** — each depends on the previous.
 
 ### Step 1: Infrastructure
 
-```sql
-CREATE WAREHOUSE IF NOT EXISTS COMPUTE_WH
-    WAREHOUSE_SIZE = 'X-Small'
-    AUTO_SUSPEND = 300
-    AUTO_RESUME = TRUE
-    INITIALLY_SUSPENDED = TRUE
-    ENABLE_QUERY_ACCELERATION = TRUE
-    QUERY_ACCELERATION_MAX_SCALE_FACTOR = 2
-    COMMENT = 'General-purpose compute warehouse for risk-fraud pipelines';
+Execute all SQL files from `infrastructure/` in this order:
+1. `infrastructure/warehouses.sql` — creates COMPUTE_WH
+2. `infrastructure/database.sql` — creates RISK_DB
+3. `infrastructure/schemas.sql` — creates RISK_DB.RAW, RISK_DB.CURATED, RISK_DB.SEMANTICS
+4. `infrastructure/file_formats.sql` — creates RISK_DB.RAW.CSV_FORMAT
+5. `infrastructure/stages.sql` — creates RISK_DB.RAW.POLICIES_STAGE, RISK_DB.RAW.RISK_FRAUD_DATA_STAGE
 
-CREATE DATABASE IF NOT EXISTS RISK_DB;
-CREATE SCHEMA IF NOT EXISTS RISK_DB.RAW;
-CREATE SCHEMA IF NOT EXISTS RISK_DB.CURATED;
-CREATE SCHEMA IF NOT EXISTS RISK_DB.SEMANTICS;
-
-CREATE FILE FORMAT IF NOT EXISTS RISK_DB.RAW.CSV_FORMAT
-    TYPE = 'CSV'
-    FIELD_DELIMITER = ','
-    RECORD_DELIMITER = '\n'
-    SKIP_HEADER = 1
-    FIELD_OPTIONALLY_ENCLOSED_BY = '"'
-    TRIM_SPACE = TRUE
-    NULL_IF = ('', 'NULL', 'null')
-    COMMENT = 'Standard CSV format for risk data files';
-
-CREATE STAGE IF NOT EXISTS RISK_DB.RAW.POLICIES_STAGE
-    DIRECTORY = (ENABLE = TRUE)
-    COMMENT = 'Risk and compliance policy documents';
-
-CREATE STAGE IF NOT EXISTS RISK_DB.RAW.RISK_FRAUD_DATA_STAGE
-    DIRECTORY = (ENABLE = TRUE)
-    COMMENT = 'Banking risk sample data CSVs';
-```
+Read each file and execute the SQL.
 
 **CHECKPOINT**: Verify all infrastructure objects exist before proceeding.
 
