@@ -1,6 +1,6 @@
--- Stored Procedure: GENERATE_RISK_DATA
+-- Stored Procedure: SP_GENERATE_RISK_DATA
 -- Generates synthetic banking risk data and loads to stages
--- Usage: CALL RISK_DB.RAW.GENERATE_RISK_DATA();
+-- Usage: CALL RISK_DB.RAW.SP_GENERATE_RISK_DATA();
 --
 -- Outputs:
 --   8 CSV files -> @RISK_DB.RAW.RISK_FRAUD_DATA_STAGE/<timestamp>/
@@ -8,7 +8,7 @@
 --
 -- Each run creates a new timestamp folder for versioning.
 
-CREATE OR REPLACE PROCEDURE RISK_DB.RAW.GENERATE_RISK_DATA()
+CREATE OR REPLACE PROCEDURE RISK_DB.RAW.SP_GENERATE_RISK_DATA()
 RETURNS VARCHAR
 LANGUAGE PYTHON
 RUNTIME_VERSION = '3.11'
