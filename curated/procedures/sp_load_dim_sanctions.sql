@@ -1,0 +1,47 @@
+CREATE OR REPLACE PROCEDURE RISK_DB.CURATED.SP_LOAD_DIM_SANCTIONS()
+RETURNS VARCHAR
+LANGUAGE SQL
+AS
+$$
+BEGIN
+    UPDATE RISK_DB.CURATED.DIM_SANCTIONS tgt
+    SET tgt.EFFECTIVE_TO = CURRENT_TIMESTAMP(),
+        tgt.IS_CURRENT = FALSE
+    WHERE tgt.IS_CURRENT = TRUE
+      AND EXISTS (
+          SELECT 1 FROM RISK_DB.CURATED.INT_SANCTIONS src
+          WHERE src.WATCHLIST_ID = tgt.WATCHLIST_ID
+            AND MD5(COALESCE(src.ENTITY_NAME,'') || '|' || COALESCE(src.ENTITY_TYPE,'') || '|' ||
+                    COALESCE(src.SOURCE_LIST,'') || '|' || COALESCE(src.COUNTRY,'') || '|' ||
+                    COALESCE(src.REASON,'') || '|' || COALESCE(src.STATUS,'') || '|' ||
+                    COALESCE(TO_CHAR(src.MATCH_SCORE_THRESHOLD),''))
+                != tgt.RECORD_HASH
+      );
+
+    INSERT INTO RISK_DB.CURATED.DIM_SANCTIONS (
+        WATCHLIST_ID, ENTITY_NAME, ENTITY_TYPE, SOURCE_LIST, COUNTRY,
+        DATE_LISTED, REASON, STATUS, MATCH_SCORE_THRESHOLD, DAYS_ON_LIST,
+        EFFECTIVE_FROM, EFFECTIVE_TO, IS_CURRENT, RECORD_HASH
+    )
+    SELECT
+        src.WATCHLIST_ID, src.ENTITY_NAME, src.ENTITY_TYPE, src.SOURCE_LIST, src.COUNTRY,
+        src.DATE_LISTED, src.REASON, src.STATUS, src.MATCH_SCORE_THRESHOLD, src.DAYS_ON_LIST,
+        CURRENT_TIMESTAMP(), '9999-12-31'::TIMESTAMP_NTZ, TRUE,
+        MD5(COALESCE(src.ENTITY_NAME,'') || '|' || COALESCE(src.ENTITY_TYPE,'') || '|' ||
+            COALESCE(src.SOURCE_LIST,'') || '|' || COALESCE(src.COUNTRY,'') || '|' ||
+            COALESCE(src.REASON,'') || '|' || COALESCE(src.STATUS,'') || '|' ||
+            COALESCE(TO_CHAR(src.MATCH_SCORE_THRESHOLD),''))
+    FROM RISK_DB.CURATED.INT_SANCTIONS src
+    WHERE NOT EXISTS (
+        SELECT 1 FROM RISK_DB.CURATED.DIM_SANCTIONS tgt
+        WHERE tgt.WATCHLIST_ID = src.WATCHLIST_ID
+          AND tgt.IS_CURRENT = TRUE
+          AND tgt.RECORD_HASH = MD5(COALESCE(src.ENTITY_NAME,'') || '|' || COALESCE(src.ENTITY_TYPE,'') || '|' ||
+              COALESCE(src.SOURCE_LIST,'') || '|' || COALESCE(src.COUNTRY,'') || '|' ||
+              COALESCE(src.REASON,'') || '|' || COALESCE(src.STATUS,'') || '|' ||
+              COALESCE(TO_CHAR(src.MATCH_SCORE_THRESHOLD),''))
+    );
+
+    RETURN 'DIM_SANCTIONS loaded successfully';
+END;
+$$;
