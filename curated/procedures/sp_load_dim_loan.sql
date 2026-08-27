@@ -1,0 +1,59 @@
+CREATE OR REPLACE PROCEDURE RISK_DB.CURATED.SP_LOAD_DIM_LOAN()
+RETURNS VARCHAR
+LANGUAGE SQL
+AS
+$$
+BEGIN
+    UPDATE RISK_DB.CURATED.DIM_LOAN tgt
+    SET tgt.EFFECTIVE_TO = CURRENT_TIMESTAMP(),
+        tgt.IS_CURRENT = FALSE
+    WHERE tgt.IS_CURRENT = TRUE
+      AND EXISTS (
+          SELECT 1 FROM RISK_DB.CURATED.INT_LOAN src
+          WHERE src.LOAN_ID = tgt.LOAN_ID
+            AND MD5(COALESCE(src.LOAN_TYPE,'') || '|' || COALESCE(TO_CHAR(src.OUTSTANDING_BALANCE),'') || '|' ||
+                    COALESCE(src.INTERNAL_RATING,'') || '|' || COALESCE(TO_CHAR(src.PD),'') || '|' ||
+                    COALESCE(TO_CHAR(src.LGD),'') || '|' || COALESCE(TO_CHAR(src.EAD),'') || '|' ||
+                    COALESCE(TO_CHAR(src.RWA),'') || '|' || COALESCE(src.STATUS,'') || '|' ||
+                    COALESCE(TO_CHAR(src.LTV_RATIO),'') || '|' || COALESCE(TO_CHAR(src.COLLATERAL_VALUE),'') || '|' ||
+                    COALESCE(TO_CHAR(src.HAS_BASEL_VIOLATION),''))
+                != tgt.RECORD_HASH
+      );
+
+    INSERT INTO RISK_DB.CURATED.DIM_LOAN (
+        LOAN_ID, CUSTOMER_ID, ACCOUNT_ID, LOAN_TYPE, LOAN_AMOUNT, OUTSTANDING_BALANCE,
+        CURRENCY, INTEREST_RATE, ORIGINATION_DATE, MATURITY_DATE, COLLATERAL_TYPE,
+        COLLATERAL_VALUE, LTV_RATIO, INTERNAL_RATING, PD, LGD, EAD, RISK_WEIGHT_PCT,
+        RWA, EXPECTED_LOSS, CAPITAL_REQUIREMENT, BASEL_APPROACH, ASSET_CLASS, STATUS,
+        HAS_BASEL_VIOLATION, IS_SECURED, LOAN_TERM_MONTHS, MONTHS_TO_MATURITY,
+        EFFECTIVE_FROM, EFFECTIVE_TO, IS_CURRENT, RECORD_HASH
+    )
+    SELECT
+        src.LOAN_ID, src.CUSTOMER_ID, src.ACCOUNT_ID, src.LOAN_TYPE, src.LOAN_AMOUNT, src.OUTSTANDING_BALANCE,
+        src.CURRENCY, src.INTEREST_RATE, src.ORIGINATION_DATE, src.MATURITY_DATE, src.COLLATERAL_TYPE,
+        src.COLLATERAL_VALUE, src.LTV_RATIO, src.INTERNAL_RATING, src.PD, src.LGD, src.EAD, src.RISK_WEIGHT_PCT,
+        src.RWA, src.EXPECTED_LOSS, src.CAPITAL_REQUIREMENT, src.BASEL_APPROACH, src.ASSET_CLASS, src.STATUS,
+        src.HAS_BASEL_VIOLATION, src.IS_SECURED, src.LOAN_TERM_MONTHS, src.MONTHS_TO_MATURITY,
+        CURRENT_TIMESTAMP(), '9999-12-31'::TIMESTAMP_NTZ, TRUE,
+        MD5(COALESCE(src.LOAN_TYPE,'') || '|' || COALESCE(TO_CHAR(src.OUTSTANDING_BALANCE),'') || '|' ||
+            COALESCE(src.INTERNAL_RATING,'') || '|' || COALESCE(TO_CHAR(src.PD),'') || '|' ||
+            COALESCE(TO_CHAR(src.LGD),'') || '|' || COALESCE(TO_CHAR(src.EAD),'') || '|' ||
+            COALESCE(TO_CHAR(src.RWA),'') || '|' || COALESCE(src.STATUS,'') || '|' ||
+            COALESCE(TO_CHAR(src.LTV_RATIO),'') || '|' || COALESCE(TO_CHAR(src.COLLATERAL_VALUE),'') || '|' ||
+            COALESCE(TO_CHAR(src.HAS_BASEL_VIOLATION),''))
+    FROM RISK_DB.CURATED.INT_LOAN src
+    WHERE NOT EXISTS (
+        SELECT 1 FROM RISK_DB.CURATED.DIM_LOAN tgt
+        WHERE tgt.LOAN_ID = src.LOAN_ID
+          AND tgt.IS_CURRENT = TRUE
+          AND tgt.RECORD_HASH = MD5(COALESCE(src.LOAN_TYPE,'') || '|' || COALESCE(TO_CHAR(src.OUTSTANDING_BALANCE),'') || '|' ||
+              COALESCE(src.INTERNAL_RATING,'') || '|' || COALESCE(TO_CHAR(src.PD),'') || '|' ||
+              COALESCE(TO_CHAR(src.LGD),'') || '|' || COALESCE(TO_CHAR(src.EAD),'') || '|' ||
+              COALESCE(TO_CHAR(src.RWA),'') || '|' || COALESCE(src.STATUS,'') || '|' ||
+              COALESCE(TO_CHAR(src.LTV_RATIO),'') || '|' || COALESCE(TO_CHAR(src.COLLATERAL_VALUE),'') || '|' ||
+              COALESCE(TO_CHAR(src.HAS_BASEL_VIOLATION),''))
+    );
+
+    RETURN 'DIM_LOAN loaded successfully';
+END;
+$$;

@@ -1,0 +1,52 @@
+CREATE OR REPLACE PROCEDURE RISK_DB.CURATED.SP_LOAD_DIM_ACCOUNT()
+RETURNS VARCHAR
+LANGUAGE SQL
+AS
+$$
+BEGIN
+    UPDATE RISK_DB.CURATED.DIM_ACCOUNT tgt
+    SET tgt.EFFECTIVE_TO = CURRENT_TIMESTAMP(),
+        tgt.IS_CURRENT = FALSE
+    WHERE tgt.IS_CURRENT = TRUE
+      AND EXISTS (
+          SELECT 1 FROM RISK_DB.CURATED.INT_ACCOUNT src
+          WHERE src.ACCOUNT_ID = tgt.ACCOUNT_ID
+            AND MD5(COALESCE(src.ACCOUNT_TYPE,'') || '|' || COALESCE(src.CURRENCY,'') || '|' ||
+                    COALESCE(src.STATUS,'') || '|' || COALESCE(src.BRANCH_CODE,'') || '|' ||
+                    COALESCE(src.COUNTRY,'') || '|' || COALESCE(TO_CHAR(src.BALANCE),'') || '|' ||
+                    COALESCE(TO_CHAR(src.CREDIT_LIMIT),'') || '|' || COALESCE(TO_CHAR(src.OVERDRAFT_LIMIT),'') || '|' ||
+                    COALESCE(TO_CHAR(src.LAST_ACTIVITY_DATE),'') || '|' || COALESCE(TO_CHAR(src.RISK_SCORE),''))
+                != tgt.RECORD_HASH
+      );
+
+    INSERT INTO RISK_DB.CURATED.DIM_ACCOUNT (
+        ACCOUNT_ID, CUSTOMER_ID, ACCOUNT_TYPE, CURRENCY, OPENING_DATE, STATUS,
+        BRANCH_CODE, COUNTRY, BALANCE, CREDIT_LIMIT, OVERDRAFT_LIMIT,
+        LAST_ACTIVITY_DATE, RISK_SCORE, DAYS_SINCE_LAST_ACTIVITY, IS_DORMANT, IS_OVERDRAWN,
+        EFFECTIVE_FROM, EFFECTIVE_TO, IS_CURRENT, RECORD_HASH
+    )
+    SELECT
+        src.ACCOUNT_ID, src.CUSTOMER_ID, src.ACCOUNT_TYPE, src.CURRENCY, src.OPENING_DATE, src.STATUS,
+        src.BRANCH_CODE, src.COUNTRY, src.BALANCE, src.CREDIT_LIMIT, src.OVERDRAFT_LIMIT,
+        src.LAST_ACTIVITY_DATE, src.RISK_SCORE, src.DAYS_SINCE_LAST_ACTIVITY, src.IS_DORMANT, src.IS_OVERDRAWN,
+        CURRENT_TIMESTAMP(), '9999-12-31'::TIMESTAMP_NTZ, TRUE,
+        MD5(COALESCE(src.ACCOUNT_TYPE,'') || '|' || COALESCE(src.CURRENCY,'') || '|' ||
+            COALESCE(src.STATUS,'') || '|' || COALESCE(src.BRANCH_CODE,'') || '|' ||
+            COALESCE(src.COUNTRY,'') || '|' || COALESCE(TO_CHAR(src.BALANCE),'') || '|' ||
+            COALESCE(TO_CHAR(src.CREDIT_LIMIT),'') || '|' || COALESCE(TO_CHAR(src.OVERDRAFT_LIMIT),'') || '|' ||
+            COALESCE(TO_CHAR(src.LAST_ACTIVITY_DATE),'') || '|' || COALESCE(TO_CHAR(src.RISK_SCORE),''))
+    FROM RISK_DB.CURATED.INT_ACCOUNT src
+    WHERE NOT EXISTS (
+        SELECT 1 FROM RISK_DB.CURATED.DIM_ACCOUNT tgt
+        WHERE tgt.ACCOUNT_ID = src.ACCOUNT_ID
+          AND tgt.IS_CURRENT = TRUE
+          AND tgt.RECORD_HASH = MD5(COALESCE(src.ACCOUNT_TYPE,'') || '|' || COALESCE(src.CURRENCY,'') || '|' ||
+              COALESCE(src.STATUS,'') || '|' || COALESCE(src.BRANCH_CODE,'') || '|' ||
+              COALESCE(src.COUNTRY,'') || '|' || COALESCE(TO_CHAR(src.BALANCE),'') || '|' ||
+              COALESCE(TO_CHAR(src.CREDIT_LIMIT),'') || '|' || COALESCE(TO_CHAR(src.OVERDRAFT_LIMIT),'') || '|' ||
+              COALESCE(TO_CHAR(src.LAST_ACTIVITY_DATE),'') || '|' || COALESCE(TO_CHAR(src.RISK_SCORE),''))
+    );
+
+    RETURN 'DIM_ACCOUNT loaded successfully';
+END;
+$$;
