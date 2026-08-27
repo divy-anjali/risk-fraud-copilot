@@ -1,0 +1,22 @@
+version: 1
+artifacts:
+  - path: risk_fraud_signals.sv.yaml
+    type: semantic_view
+    targets:
+      default:
+        object: RISK_DB.SEMANTICS.RISK_FRAUD_SIGNALS
+  - path: regulatory_reporting.sv.yaml
+    type: semantic_view
+    targets:
+      default:
+        object: RISK_DB.SEMANTICS.REGULATORY_REPORTING
+  - path: transaction_account_360.sv.yaml
+    type: semantic_view
+    targets:
+      default:
+        object: RISK_DB.SEMANTICS.TRANSACTION_ACCOUNT_360
+  - path: investigation_facts.sv.yaml
+    type: semantic_view
+    targets:
+      default:
+        object: RISK_DB.SEMANTICS.INVESTIGATION_FACTS

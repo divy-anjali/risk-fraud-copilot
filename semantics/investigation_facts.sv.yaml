@@ -1,0 +1,508 @@
+name: INVESTIGATION_FACTS
+description: Provides comprehensive investigation facts combining transaction alerts, customer profiles, account details, sanctions/PEP screening, and loan performance data. Designed for compliance investigators and case management workflows.
+tables:
+  - name: FCT_TRANSACTION
+    base_table:
+      database: RISK_DB
+      schema: CURATED
+      table: FCT_TRANSACTION
+    dimensions:
+      - name: TRANSACTION_ID
+        expr: TRANSACTION_ID
+        data_type: VARCHAR
+      - name: DIM_ACCOUNT_SK
+        expr: DIM_ACCOUNT_SK
+        data_type: NUMBER
+      - name: DIM_CUSTOMER_SK
+        expr: DIM_CUSTOMER_SK
+        data_type: NUMBER
+      - name: TRANSACTION_TYPE
+        expr: TRANSACTION_TYPE
+        data_type: VARCHAR
+      - name: AMOUNT
+        expr: AMOUNT
+        data_type: NUMBER
+      - name: CURRENCY
+        expr: CURRENCY
+        data_type: VARCHAR
+      - name: DIRECTION
+        expr: DIRECTION
+        data_type: VARCHAR
+      - name: CHANNEL
+        expr: CHANNEL
+        data_type: VARCHAR
+      - name: ORIGINATOR_NAME
+        expr: ORIGINATOR_NAME
+        data_type: VARCHAR
+      - name: ORIGINATOR_COUNTRY
+        expr: ORIGINATOR_COUNTRY
+        data_type: VARCHAR
+      - name: BENEFICIARY_NAME
+        expr: BENEFICIARY_NAME
+        data_type: VARCHAR
+      - name: BENEFICIARY_COUNTRY
+        expr: BENEFICIARY_COUNTRY
+        data_type: VARCHAR
+      - name: BENEFICIARY_BANK
+        expr: BENEFICIARY_BANK
+        data_type: VARCHAR
+      - name: PURPOSE_CODE
+        expr: PURPOSE_CODE
+        data_type: VARCHAR
+      - name: HAS_AML_FLAG
+        expr: HAS_AML_FLAG
+        data_type: BOOLEAN
+        description: Indicates whether this transaction triggered an AML alert during screening.
+      - name: AML_ALERT_TYPE
+        expr: AML_ALERT_TYPE
+        data_type: VARCHAR
+        description: 'Category of AML alert: structuring, unusual pattern, sanctions match, or high-risk jurisdiction.'
+      - name: RISK_SCORE
+        expr: RISK_SCORE
+        data_type: NUMBER
+      - name: SCREENING_STATUS
+        expr: SCREENING_STATUS
+        data_type: VARCHAR
+        description: 'Current screening status: PENDING, CLEARED, or ESCALATED.'
+      - name: IS_CASH
+        expr: IS_CASH
+        data_type: BOOLEAN
+      - name: IS_CTR_FILED
+        expr: IS_CTR_FILED
+        data_type: BOOLEAN
+      - name: IS_CROSS_BORDER
+        expr: IS_CROSS_BORDER
+        data_type: BOOLEAN
+      - name: IS_LARGE_TRANSACTION
+        expr: IS_LARGE_TRANSACTION
+        data_type: BOOLEAN
+      - name: TRANSACTION_DATE_SK
+        expr: TRANSACTION_DATE_SK
+        data_type: NUMBER
+    time_dimensions:
+      - name: TRANSACTION_DATE
+        expr: TRANSACTION_DATE
+        data_type: DATE
+      - name: TRANSACTION_TIMESTAMP
+        expr: TRANSACTION_TIMESTAMP
+        data_type: TIMESTAMP_NTZ
+    description: Transaction fact with AML alert details and screening outcomes. Each row represents one transaction with full originator/beneficiary details for investigation workflows.
+    metrics:
+      - name: TOTAL_AMOUNT
+        description: Total transaction amount for flagged activity.
+        expr: SUM(AMOUNT)
+      - name: FLAGGED_COUNT
+        description: Count of AML-flagged transactions.
+        expr: SUM(CASE WHEN HAS_AML_FLAG THEN 1 ELSE 0 END)
+      - name: TRANSACTION_COUNT
+        description: Count of transactions.
+        expr: COUNT(TRANSACTION_ID)
+  - name: DIM_CUSTOMER
+    base_table:
+      database: RISK_DB
+      schema: CURATED
+      table: DIM_CUSTOMER
+    primary_key:
+      columns:
+        - DIM_CUSTOMER_SK
+    dimensions:
+      - name: DIM_CUSTOMER_SK
+        expr: DIM_CUSTOMER_SK
+        data_type: NUMBER
+      - name: CUSTOMER_ID
+        expr: CUSTOMER_ID
+        data_type: VARCHAR
+      - name: FULL_NAME
+        expr: FULL_NAME
+        data_type: VARCHAR
+      - name: NATIONALITY
+        expr: NATIONALITY
+        data_type: VARCHAR
+      - name: COUNTRY_OF_RESIDENCE
+        expr: COUNTRY_OF_RESIDENCE
+        data_type: VARCHAR
+      - name: CUSTOMER_TYPE
+        expr: CUSTOMER_TYPE
+        data_type: VARCHAR
+      - name: INDUSTRY
+        expr: INDUSTRY
+        data_type: VARCHAR
+      - name: RISK_RATING
+        expr: RISK_RATING
+        data_type: VARCHAR
+        description: 'Customer risk classification: LOW, MEDIUM, HIGH, or VERY HIGH.'
+      - name: KYC_STATUS
+        expr: KYC_STATUS
+        data_type: VARCHAR
+        description: 'KYC verification status: VERIFIED, PENDING, EXPIRED, or REJECTED.'
+      - name: PEP_FLAG
+        expr: PEP_FLAG
+        data_type: BOOLEAN
+        description: True if customer is identified as a Politically Exposed Person.
+      - name: SANCTIONS_MATCH_FLAG
+        expr: SANCTIONS_MATCH_FLAG
+        data_type: BOOLEAN
+        description: True if the customer name matched an entry on a sanctions watchlist.
+      - name: ANNUAL_INCOME
+        expr: ANNUAL_INCOME
+        data_type: NUMBER
+      - name: SOURCE_OF_FUNDS
+        expr: SOURCE_OF_FUNDS
+        data_type: VARCHAR
+      - name: ACCOUNT_PURPOSE
+        expr: ACCOUNT_PURPOSE
+        data_type: VARCHAR
+      - name: STATUS
+        expr: STATUS
+        data_type: VARCHAR
+      - name: IS_HIGH_RISK
+        expr: IS_HIGH_RISK
+        data_type: BOOLEAN
+      - name: AGE_YEARS
+        expr: AGE_YEARS
+        data_type: NUMBER
+      - name: DAYS_SINCE_ONBOARDING
+        expr: DAYS_SINCE_ONBOARDING
+        data_type: NUMBER
+      - name: IS_CURRENT
+        expr: IS_CURRENT
+        data_type: BOOLEAN
+    time_dimensions:
+      - name: DATE_OF_BIRTH
+        expr: DATE_OF_BIRTH
+        data_type: DATE
+      - name: KYC_LAST_REVIEWED
+        expr: KYC_LAST_REVIEWED
+        data_type: DATE
+      - name: ONBOARDING_DATE
+        expr: ONBOARDING_DATE
+        data_type: DATE
+    unique_keys:
+      - columns:
+          - CUSTOMER_ID
+    description: Customer dimension with full investigation profile including KYC status, PEP/sanctions flags, income, and onboarding history. Each row represents one customer.
+  - name: DIM_ACCOUNT
+    base_table:
+      database: RISK_DB
+      schema: CURATED
+      table: DIM_ACCOUNT
+    primary_key:
+      columns:
+        - DIM_ACCOUNT_SK
+    dimensions:
+      - name: DIM_ACCOUNT_SK
+        expr: DIM_ACCOUNT_SK
+        data_type: NUMBER
+      - name: ACCOUNT_ID
+        expr: ACCOUNT_ID
+        data_type: VARCHAR
+      - name: CUSTOMER_ID
+        expr: CUSTOMER_ID
+        data_type: VARCHAR
+      - name: ACCOUNT_TYPE
+        expr: ACCOUNT_TYPE
+        data_type: VARCHAR
+      - name: CURRENCY
+        expr: CURRENCY
+        data_type: VARCHAR
+      - name: STATUS
+        expr: STATUS
+        data_type: VARCHAR
+      - name: BRANCH_CODE
+        expr: BRANCH_CODE
+        data_type: VARCHAR
+      - name: COUNTRY
+        expr: COUNTRY
+        data_type: VARCHAR
+      - name: BALANCE
+        expr: BALANCE
+        data_type: NUMBER
+      - name: CREDIT_LIMIT
+        expr: CREDIT_LIMIT
+        data_type: NUMBER
+      - name: OVERDRAFT_LIMIT
+        expr: OVERDRAFT_LIMIT
+        data_type: NUMBER
+      - name: RISK_SCORE
+        expr: RISK_SCORE
+        data_type: NUMBER
+      - name: DAYS_SINCE_LAST_ACTIVITY
+        expr: DAYS_SINCE_LAST_ACTIVITY
+        data_type: NUMBER
+      - name: IS_DORMANT
+        expr: IS_DORMANT
+        data_type: BOOLEAN
+      - name: IS_OVERDRAWN
+        expr: IS_OVERDRAWN
+        data_type: BOOLEAN
+      - name: IS_CURRENT
+        expr: IS_CURRENT
+        data_type: BOOLEAN
+    time_dimensions:
+      - name: OPENING_DATE
+        expr: OPENING_DATE
+        data_type: DATE
+      - name: LAST_ACTIVITY_DATE
+        expr: LAST_ACTIVITY_DATE
+        data_type: DATE
+    unique_keys:
+      - columns:
+          - ACCOUNT_ID
+    description: Account dimension providing account context for investigations including balance, dormancy, and overdraft status. Each row represents one account.
+  - name: DIM_SANCTIONS
+    base_table:
+      database: RISK_DB
+      schema: CURATED
+      table: DIM_SANCTIONS
+    dimensions:
+      - name: DIM_SANCTIONS_SK
+        expr: DIM_SANCTIONS_SK
+        data_type: NUMBER
+      - name: WATCHLIST_ID
+        expr: WATCHLIST_ID
+        data_type: VARCHAR
+      - name: ENTITY_NAME
+        expr: ENTITY_NAME
+        data_type: VARCHAR
+        description: Name of the sanctioned entity as listed on the watchlist.
+      - name: ENTITY_TYPE
+        expr: ENTITY_TYPE
+        data_type: VARCHAR
+      - name: SOURCE_LIST
+        expr: SOURCE_LIST
+        data_type: VARCHAR
+        description: 'Originating sanctions list: OFAC, EU, UN, or HMT.'
+      - name: COUNTRY
+        expr: COUNTRY
+        data_type: VARCHAR
+      - name: REASON
+        expr: REASON
+        data_type: VARCHAR
+      - name: STATUS
+        expr: STATUS
+        data_type: VARCHAR
+      - name: MATCH_SCORE_THRESHOLD
+        expr: MATCH_SCORE_THRESHOLD
+        data_type: NUMBER
+      - name: DAYS_ON_LIST
+        expr: DAYS_ON_LIST
+        data_type: NUMBER
+      - name: IS_CURRENT
+        expr: IS_CURRENT
+        data_type: BOOLEAN
+    time_dimensions:
+      - name: DATE_LISTED
+        expr: DATE_LISTED
+        data_type: DATE
+    description: Sanctions watchlist entries for cross-referencing against customer and transaction counterparties. Each row represents one sanctioned entity.
+  - name: DIM_PEP
+    base_table:
+      database: RISK_DB
+      schema: CURATED
+      table: DIM_PEP
+    dimensions:
+      - name: DIM_PEP_SK
+        expr: DIM_PEP_SK
+        data_type: NUMBER
+      - name: PEP_ID
+        expr: PEP_ID
+        data_type: VARCHAR
+      - name: FULL_NAME
+        expr: FULL_NAME
+        data_type: VARCHAR
+      - name: POSITION
+        expr: POSITION
+        data_type: VARCHAR
+      - name: COUNTRY
+        expr: COUNTRY
+        data_type: VARCHAR
+      - name: PEP_TIER
+        expr: PEP_TIER
+        data_type: VARCHAR
+        description: 'PEP classification tier: TIER1 (heads of state), TIER2 (senior officials), TIER3 (associates).'
+      - name: RELATIONSHIP_TYPE
+        expr: RELATIONSHIP_TYPE
+        data_type: VARCHAR
+      - name: STATUS
+        expr: STATUS
+        data_type: VARCHAR
+      - name: SOURCE
+        expr: SOURCE
+        data_type: VARCHAR
+      - name: DAYS_ON_LIST
+        expr: DAYS_ON_LIST
+        data_type: NUMBER
+      - name: IS_CURRENT
+        expr: IS_CURRENT
+        data_type: BOOLEAN
+    time_dimensions:
+      - name: DATE_ADDED
+        expr: DATE_ADDED
+        data_type: DATE
+    description: PEP list for cross-referencing during investigations. Each row represents one politically exposed person with tier and relationship details.
+  - name: FCT_LOAN_PERFORMANCE
+    base_table:
+      database: RISK_DB
+      schema: CURATED
+      table: FCT_LOAN_PERFORMANCE
+    dimensions:
+      - name: PERFORMANCE_ID
+        expr: PERFORMANCE_ID
+        data_type: VARCHAR
+      - name: DIM_LOAN_SK
+        expr: DIM_LOAN_SK
+        data_type: NUMBER
+      - name: DIM_CUSTOMER_SK
+        expr: DIM_CUSTOMER_SK
+        data_type: NUMBER
+      - name: DAYS_PAST_DUE
+        expr: DAYS_PAST_DUE
+        data_type: NUMBER
+      - name: DELINQUENCY_STATUS
+        expr: DELINQUENCY_STATUS
+        data_type: VARCHAR
+      - name: OUTSTANDING_PRINCIPAL
+        expr: OUTSTANDING_PRINCIPAL
+        data_type: NUMBER
+      - name: PROVISION_AMOUNT
+        expr: PROVISION_AMOUNT
+        data_type: NUMBER
+      - name: STAGE_IFRS9
+        expr: STAGE_IFRS9
+        data_type: VARCHAR
+        description: 'IFRS9 impairment stage: Stage 1, Stage 2, or Stage 3.'
+      - name: ECL_AMOUNT
+        expr: ECL_AMOUNT
+        data_type: NUMBER
+      - name: IS_RESTRUCTURED
+        expr: IS_RESTRUCTURED
+        data_type: BOOLEAN
+      - name: IS_WRITTEN_OFF
+        expr: IS_WRITTEN_OFF
+        data_type: BOOLEAN
+      - name: RISK_MIGRATION
+        expr: RISK_MIGRATION
+        data_type: VARCHAR
+      - name: IS_DELINQUENT
+        expr: IS_DELINQUENT
+        data_type: BOOLEAN
+        description: True when the loan has missed one or more scheduled payments.
+    time_dimensions:
+      - name: REPORT_DATE
+        expr: REPORT_DATE
+        data_type: DATE
+    description: Loan performance metrics for credit risk investigations. Each row represents one loan observation with delinquency, IFRS9 stage, and ECL data.
+    metrics:
+      - name: TOTAL_ECL
+        description: Total expected credit loss.
+        expr: SUM(ECL_AMOUNT)
+      - name: TOTAL_OUTSTANDING
+        description: Total outstanding loan principal.
+        expr: SUM(OUTSTANDING_PRINCIPAL)
+  - name: DIM_LOAN
+    base_table:
+      database: RISK_DB
+      schema: CURATED
+      table: DIM_LOAN
+    primary_key:
+      columns:
+        - DIM_LOAN_SK
+    dimensions:
+      - name: DIM_LOAN_SK
+        expr: DIM_LOAN_SK
+        data_type: NUMBER
+      - name: LOAN_ID
+        expr: LOAN_ID
+        data_type: VARCHAR
+      - name: CUSTOMER_ID
+        expr: CUSTOMER_ID
+        data_type: VARCHAR
+      - name: ACCOUNT_ID
+        expr: ACCOUNT_ID
+        data_type: VARCHAR
+      - name: LOAN_TYPE
+        expr: LOAN_TYPE
+        data_type: VARCHAR
+      - name: LOAN_AMOUNT
+        expr: LOAN_AMOUNT
+        data_type: NUMBER
+      - name: OUTSTANDING_BALANCE
+        expr: OUTSTANDING_BALANCE
+        data_type: NUMBER
+      - name: INTERNAL_RATING
+        expr: INTERNAL_RATING
+        data_type: VARCHAR
+      - name: PD
+        expr: PD
+        data_type: NUMBER
+      - name: LGD
+        expr: LGD
+        data_type: NUMBER
+      - name: EAD
+        expr: EAD
+        data_type: NUMBER
+      - name: ASSET_CLASS
+        expr: ASSET_CLASS
+        data_type: VARCHAR
+      - name: STATUS
+        expr: STATUS
+        data_type: VARCHAR
+      - name: HAS_BASEL_VIOLATION
+        expr: HAS_BASEL_VIOLATION
+        data_type: BOOLEAN
+      - name: IS_CURRENT
+        expr: IS_CURRENT
+        data_type: BOOLEAN
+    unique_keys:
+      - columns:
+          - CUSTOMER_ID
+    description: Loan master data for investigation context including ratings, risk parameters, and Basel violation flags. Each row represents one loan facility.
+relationships:
+  - name: FCT_LOAN_PERFORMANCE_TO_DIM_CUSTOMER
+    left_table: FCT_LOAN_PERFORMANCE
+    right_table: DIM_CUSTOMER
+    join_type: inner
+    relationship_type: many_to_one
+    relationship_columns:
+      - left_column: DIM_CUSTOMER_SK
+        right_column: DIM_CUSTOMER_SK
+  - name: FCT_LOAN_PERFORMANCE_TO_DIM_LOAN
+    left_table: FCT_LOAN_PERFORMANCE
+    right_table: DIM_LOAN
+    join_type: inner
+    relationship_type: many_to_one
+    relationship_columns:
+      - left_column: DIM_LOAN_SK
+        right_column: DIM_LOAN_SK
+  - name: FCT_TRANSACTION_TO_DIM_ACCOUNT
+    left_table: FCT_TRANSACTION
+    right_table: DIM_ACCOUNT
+    join_type: inner
+    relationship_type: many_to_one
+    relationship_columns:
+      - left_column: DIM_ACCOUNT_SK
+        right_column: DIM_ACCOUNT_SK
+  - name: FCT_TRANSACTION_TO_DIM_CUSTOMER
+    left_table: FCT_TRANSACTION
+    right_table: DIM_CUSTOMER
+    join_type: inner
+    relationship_type: many_to_one
+    relationship_columns:
+      - left_column: DIM_CUSTOMER_SK
+        right_column: DIM_CUSTOMER_SK
+verified_queries:
+  - name: 0;1
+    question: Which customers have the highest total amounts in AML flagged transactions and what are their investigation profiles?
+    sql: SELECT c.FULL_NAME, c.CUSTOMER_ID, c.RISK_RATING, c.KYC_STATUS, c.PEP_FLAG, c.SANCTIONS_MATCH_FLAG, COUNT(t.TRANSACTION_ID) AS flagged_txns, SUM(t.AMOUNT) AS flagged_amount FROM fct_transaction AS t JOIN dim_customer AS c ON t.DIM_CUSTOMER_SK = c.DIM_CUSTOMER_SK WHERE t.HAS_AML_FLAG = TRUE AND c.IS_CURRENT = TRUE GROUP BY c.FULL_NAME, c.CUSTOMER_ID, c.RISK_RATING, c.KYC_STATUS, c.PEP_FLAG, c.SANCTIONS_MATCH_FLAG ORDER BY flagged_amount DESC
+    verified_at: 1787803925
+    verified_by: Semantic Model Generator
+  - name: 1;1
+    question: What are the detailed transaction investigation records for all flagged AML activity including customer and account information?
+    sql: SELECT c.FULL_NAME, c.CUSTOMER_ID, a.ACCOUNT_ID, a.ACCOUNT_TYPE, t.TRANSACTION_DATE, t.TRANSACTION_TYPE, t.AMOUNT, t.DIRECTION, t.BENEFICIARY_COUNTRY, t.AML_ALERT_TYPE, t.SCREENING_STATUS FROM fct_transaction AS t JOIN dim_customer AS c ON t.DIM_CUSTOMER_SK = c.DIM_CUSTOMER_SK JOIN dim_account AS a ON t.DIM_ACCOUNT_SK = a.DIM_ACCOUNT_SK WHERE t.HAS_AML_FLAG = TRUE AND c.IS_CURRENT = TRUE AND a.IS_CURRENT = TRUE ORDER BY t.TRANSACTION_DATE DESC
+    verified_at: 1787803925
+    verified_by: Semantic Model Generator
+  - name: 2;1
+    question: What are the delinquent loan investigation facts with customer and loan details?
+    sql: SELECT c.FULL_NAME, c.RISK_RATING, lp.DELINQUENCY_STATUS, lp.STAGE_IFRS9, l.LOAN_TYPE, l.INTERNAL_RATING, lp.OUTSTANDING_PRINCIPAL, lp.ECL_AMOUNT, lp.DAYS_PAST_DUE FROM fct_loan_performance AS lp JOIN dim_loan AS l ON lp.DIM_LOAN_SK = l.DIM_LOAN_SK JOIN dim_customer AS c ON lp.DIM_CUSTOMER_SK = c.DIM_CUSTOMER_SK WHERE lp.IS_DELINQUENT = TRUE AND c.IS_CURRENT = TRUE AND l.IS_CURRENT = TRUE
+    verified_at: 1787803925
+    verified_by: Semantic Model Generator

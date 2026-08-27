@@ -1,0 +1,332 @@
+name: REGULATORY_REPORTING
+description: Provides audit-ready regulatory outputs including Basel capital adequacy (RWA, PD, LGD, EAD), IFRS9 expected credit loss staging, liquidity coverage (LCR/NSFR), and policy compliance documentation.
+tables:
+  - name: FCT_LOAN_PERFORMANCE
+    base_table:
+      database: RISK_DB
+      schema: CURATED
+      table: FCT_LOAN_PERFORMANCE
+    dimensions:
+      - name: PERFORMANCE_ID
+        expr: PERFORMANCE_ID
+        data_type: VARCHAR
+      - name: DIM_LOAN_SK
+        expr: DIM_LOAN_SK
+        data_type: NUMBER
+      - name: DIM_CUSTOMER_SK
+        expr: DIM_CUSTOMER_SK
+        data_type: NUMBER
+      - name: DAYS_PAST_DUE
+        expr: DAYS_PAST_DUE
+        data_type: NUMBER
+        description: Number of days the loan payment is overdue.
+      - name: DELINQUENCY_STATUS
+        expr: DELINQUENCY_STATUS
+        data_type: VARCHAR
+      - name: PAYMENT_AMOUNT_DUE
+        expr: PAYMENT_AMOUNT_DUE
+        data_type: NUMBER
+      - name: PAYMENT_AMOUNT_RECEIVED
+        expr: PAYMENT_AMOUNT_RECEIVED
+        data_type: NUMBER
+      - name: OUTSTANDING_PRINCIPAL
+        expr: OUTSTANDING_PRINCIPAL
+        data_type: NUMBER
+      - name: ACCRUED_INTEREST
+        expr: ACCRUED_INTEREST
+        data_type: NUMBER
+      - name: PROVISION_AMOUNT
+        expr: PROVISION_AMOUNT
+        data_type: NUMBER
+      - name: STAGE_IFRS9
+        expr: STAGE_IFRS9
+        data_type: VARCHAR
+        description: 'IFRS9 impairment stage: Stage 1 (performing), Stage 2 (significant increase in credit risk), Stage 3 (credit-impaired).'
+      - name: ECL_AMOUNT
+        expr: ECL_AMOUNT
+        data_type: NUMBER
+        description: Expected Credit Loss calculated per IFRS9 methodology.
+      - name: IS_RESTRUCTURED
+        expr: IS_RESTRUCTURED
+        data_type: BOOLEAN
+      - name: IS_WRITTEN_OFF
+        expr: IS_WRITTEN_OFF
+        data_type: BOOLEAN
+      - name: RECOVERY_AMOUNT
+        expr: RECOVERY_AMOUNT
+        data_type: NUMBER
+      - name: RISK_MIGRATION
+        expr: RISK_MIGRATION
+        data_type: VARCHAR
+      - name: IS_DELINQUENT
+        expr: IS_DELINQUENT
+        data_type: BOOLEAN
+        description: True when the loan has missed one or more scheduled payments.
+      - name: PAYMENT_VARIANCE
+        expr: PAYMENT_VARIANCE
+        data_type: NUMBER
+      - name: PAYMENT_COVERAGE_RATIO
+        expr: PAYMENT_COVERAGE_RATIO
+        data_type: NUMBER
+      - name: REPORT_DATE_SK
+        expr: REPORT_DATE_SK
+        data_type: NUMBER
+    time_dimensions:
+      - name: REPORT_DATE
+        expr: REPORT_DATE
+        data_type: DATE
+    description: Tracks loan payment performance at the reporting period level. Each row represents one loan observation on a given report date with delinquency status, IFRS9 staging, and ECL amounts.
+    metrics:
+      - name: TOTAL_ECL
+        description: Total expected credit loss amount across the portfolio.
+        expr: SUM(ECL_AMOUNT)
+      - name: TOTAL_OUTSTANDING_PRINCIPAL
+        description: Total outstanding principal exposure.
+        expr: SUM(OUTSTANDING_PRINCIPAL)
+      - name: TOTAL_PROVISION
+        description: Total provision amount for credit losses.
+        expr: SUM(PROVISION_AMOUNT)
+      - name: LOAN_COUNT
+        description: Count of loan performance records.
+        expr: COUNT(PERFORMANCE_ID)
+  - name: DIM_LOAN
+    base_table:
+      database: RISK_DB
+      schema: CURATED
+      table: DIM_LOAN
+    primary_key:
+      columns:
+        - DIM_LOAN_SK
+    dimensions:
+      - name: DIM_LOAN_SK
+        expr: DIM_LOAN_SK
+        data_type: NUMBER
+      - name: LOAN_ID
+        expr: LOAN_ID
+        data_type: VARCHAR
+      - name: CUSTOMER_ID
+        expr: CUSTOMER_ID
+        data_type: VARCHAR
+      - name: ACCOUNT_ID
+        expr: ACCOUNT_ID
+        data_type: VARCHAR
+      - name: LOAN_TYPE
+        expr: LOAN_TYPE
+        data_type: VARCHAR
+      - name: LOAN_AMOUNT
+        expr: LOAN_AMOUNT
+        data_type: NUMBER
+      - name: OUTSTANDING_BALANCE
+        expr: OUTSTANDING_BALANCE
+        data_type: NUMBER
+      - name: CURRENCY
+        expr: CURRENCY
+        data_type: VARCHAR
+      - name: INTEREST_RATE
+        expr: INTEREST_RATE
+        data_type: NUMBER
+      - name: COLLATERAL_TYPE
+        expr: COLLATERAL_TYPE
+        data_type: VARCHAR
+      - name: COLLATERAL_VALUE
+        expr: COLLATERAL_VALUE
+        data_type: NUMBER
+      - name: LTV_RATIO
+        expr: LTV_RATIO
+        data_type: NUMBER
+      - name: INTERNAL_RATING
+        expr: INTERNAL_RATING
+        data_type: VARCHAR
+      - name: PD
+        expr: PD
+        data_type: NUMBER
+        description: Probability of Default as a percentage.
+      - name: LGD
+        expr: LGD
+        data_type: NUMBER
+        description: Loss Given Default as a percentage of exposure.
+      - name: EAD
+        expr: EAD
+        data_type: NUMBER
+        description: Exposure At Default representing the total exposure at time of default.
+      - name: RISK_WEIGHT_PCT
+        expr: RISK_WEIGHT_PCT
+        data_type: NUMBER
+      - name: RWA
+        expr: RWA
+        data_type: NUMBER
+        description: Risk-Weighted Assets calculated per Basel framework.
+      - name: EXPECTED_LOSS
+        expr: EXPECTED_LOSS
+        data_type: NUMBER
+      - name: CAPITAL_REQUIREMENT
+        expr: CAPITAL_REQUIREMENT
+        data_type: NUMBER
+      - name: BASEL_APPROACH
+        expr: BASEL_APPROACH
+        data_type: VARCHAR
+        description: 'Basel capital calculation methodology: Standardized or IRB (Internal Ratings-Based).'
+      - name: ASSET_CLASS
+        expr: ASSET_CLASS
+        data_type: VARCHAR
+      - name: STATUS
+        expr: STATUS
+        data_type: VARCHAR
+      - name: HAS_BASEL_VIOLATION
+        expr: HAS_BASEL_VIOLATION
+        data_type: BOOLEAN
+        description: True when the loan breaches Basel regulatory thresholds.
+      - name: IS_SECURED
+        expr: IS_SECURED
+        data_type: BOOLEAN
+      - name: IS_CURRENT
+        expr: IS_CURRENT
+        data_type: BOOLEAN
+    time_dimensions:
+      - name: ORIGINATION_DATE
+        expr: ORIGINATION_DATE
+        data_type: DATE
+      - name: MATURITY_DATE
+        expr: MATURITY_DATE
+        data_type: DATE
+    description: Loan master dimension with Basel risk parameters. Each row represents one loan facility with PD, LGD, EAD, RWA calculations, and collateral details.
+    metrics:
+      - name: TOTAL_RWA
+        description: Total risk-weighted assets.
+        expr: SUM(RWA)
+      - name: TOTAL_CAPITAL_REQUIREMENT
+        description: Total regulatory capital requirement.
+        expr: SUM(CAPITAL_REQUIREMENT)
+  - name: FCT_DEPOSIT_BALANCE
+    base_table:
+      database: RISK_DB
+      schema: CURATED
+      table: FCT_DEPOSIT_BALANCE
+    dimensions:
+      - name: DEPOSIT_ID
+        expr: DEPOSIT_ID
+        data_type: VARCHAR
+      - name: DIM_ACCOUNT_SK
+        expr: DIM_ACCOUNT_SK
+        data_type: NUMBER
+      - name: DIM_CUSTOMER_SK
+        expr: DIM_CUSTOMER_SK
+        data_type: NUMBER
+      - name: DEPOSIT_TYPE
+        expr: DEPOSIT_TYPE
+        data_type: VARCHAR
+      - name: BALANCE
+        expr: BALANCE
+        data_type: NUMBER
+      - name: CURRENCY
+        expr: CURRENCY
+        data_type: VARCHAR
+      - name: INTEREST_RATE
+        expr: INTEREST_RATE
+        data_type: NUMBER
+      - name: INSURED_AMOUNT
+        expr: INSURED_AMOUNT
+        data_type: NUMBER
+      - name: UNINSURED_AMOUNT
+        expr: UNINSURED_AMOUNT
+        data_type: NUMBER
+      - name: STABILITY_FACTOR
+        expr: STABILITY_FACTOR
+        data_type: NUMBER
+      - name: RUN_OFF_FACTOR
+        expr: RUN_OFF_FACTOR
+        data_type: NUMBER
+      - name: LCR_CATEGORY
+        expr: LCR_CATEGORY
+        data_type: VARCHAR
+        description: Liquidity Coverage Ratio category for regulatory reporting.
+      - name: NSFR_CATEGORY
+        expr: NSFR_CATEGORY
+        data_type: VARCHAR
+        description: Net Stable Funding Ratio category for long-term liquidity compliance.
+      - name: HAS_CONCENTRATION_RISK
+        expr: HAS_CONCENTRATION_RISK
+        data_type: BOOLEAN
+      - name: IS_LARGE_DEPOSIT
+        expr: IS_LARGE_DEPOSIT
+        data_type: BOOLEAN
+      - name: HAS_LIQUIDITY_VIOLATION
+        expr: HAS_LIQUIDITY_VIOLATION
+        data_type: BOOLEAN
+      - name: DEPOSIT_TERM_DAYS
+        expr: DEPOSIT_TERM_DAYS
+        data_type: NUMBER
+      - name: UNINSURED_RATIO
+        expr: UNINSURED_RATIO
+        data_type: NUMBER
+    time_dimensions:
+      - name: EFFECTIVE_DATE
+        expr: EFFECTIVE_DATE
+        data_type: DATE
+      - name: MATURITY_DATE
+        expr: MATURITY_DATE
+        data_type: DATE
+    description: Deposit balance fact with liquidity risk metrics. Each row represents one deposit position with LCR/NSFR categorization, stability factors, and insurance coverage.
+    metrics:
+      - name: TOTAL_DEPOSIT_BALANCE
+        description: Total deposit balance.
+        expr: SUM(BALANCE)
+      - name: TOTAL_UNINSURED
+        description: Total uninsured deposit amount.
+        expr: SUM(UNINSURED_AMOUNT)
+  - name: REF_POLICY_DOCUMENTS
+    base_table:
+      database: RISK_DB
+      schema: CURATED
+      table: REF_POLICY_DOCUMENTS
+    dimensions:
+      - name: POLICY_ID
+        expr: POLICY_ID
+        data_type: NUMBER
+      - name: POLICY_NAME
+        expr: POLICY_NAME
+        data_type: VARCHAR
+      - name: CLASSIFICATION
+        expr: CLASSIFICATION
+        data_type: VARCHAR
+      - name: PURPOSE
+        expr: PURPOSE
+        data_type: VARCHAR
+      - name: VIOLATIONS
+        expr: VIOLATIONS
+        data_type: VARCHAR
+      - name: FULL_CONTENT
+        expr: FULL_CONTENT
+        data_type: VARCHAR
+      - name: CONTENT_LENGTH_CHARS
+        expr: CONTENT_LENGTH_CHARS
+        data_type: NUMBER
+    time_dimensions:
+      - name: GENERATED_AT
+        expr: GENERATED_AT
+        data_type: TIMESTAMP_NTZ
+    description: Reference table containing regulatory policy documents. Each row represents one policy document with its classification, purpose, and compliance violation records.
+verified_queries:
+  - name: 0;1
+    question: What are the total risk-weighted assets and capital requirements by Basel approach and asset class?
+    sql: SELECT l.BASEL_APPROACH, l.ASSET_CLASS, SUM(l.RWA) AS total_rwa, SUM(l.CAPITAL_REQUIREMENT) AS total_capital_req, COUNT(*) AS loan_count FROM dim_loan AS l WHERE l.IS_CURRENT = TRUE GROUP BY l.BASEL_APPROACH, l.ASSET_CLASS
+    verified_at: 1787803914
+    verified_by: Semantic Model Generator
+  - name: 1;1
+    question: What is the IFRS9 stage distribution showing expected credit loss and principal exposure?
+    sql: SELECT lp.STAGE_IFRS9, COUNT(*) AS loan_count, SUM(lp.ECL_AMOUNT) AS total_ecl, SUM(lp.OUTSTANDING_PRINCIPAL) AS total_principal FROM fct_loan_performance AS lp GROUP BY lp.STAGE_IFRS9
+    verified_at: 1787803914
+    verified_by: Semantic Model Generator
+  - name: 2;1
+    question: What is the deposit breakdown by liquidity coverage and net stable funding categories showing insured versus uninsured amounts?
+    sql: SELECT d.LCR_CATEGORY, d.NSFR_CATEGORY, SUM(d.BALANCE) AS total_balance, SUM(d.INSURED_AMOUNT) AS total_insured, SUM(d.UNINSURED_AMOUNT) AS total_uninsured FROM fct_deposit_balance AS d GROUP BY d.LCR_CATEGORY, d.NSFR_CATEGORY
+    verified_at: 1787803914
+    verified_by: Semantic Model Generator
+relationships:
+  - name: FCT_LOAN_PERFORMANCE_TO_DIM_LOAN
+    left_table: FCT_LOAN_PERFORMANCE
+    right_table: DIM_LOAN
+    join_type: inner
+    relationship_columns:
+      - left_column: DIM_LOAN_SK
+        right_column: DIM_LOAN_SK

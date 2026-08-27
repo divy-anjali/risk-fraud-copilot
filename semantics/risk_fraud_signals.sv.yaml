@@ -1,0 +1,351 @@
+name: RISK_FRAUD_SIGNALS
+description: Detects risk and fraud signals by combining transaction data with customer profiles, account details, sanctions watchlists, and PEP lists. Supports AML monitoring, sanctions screening, and fraud pattern detection.
+tables:
+  - name: FCT_TRANSACTION
+    base_table:
+      database: RISK_DB
+      schema: CURATED
+      table: FCT_TRANSACTION
+    dimensions:
+      - name: TRANSACTION_ID
+        expr: TRANSACTION_ID
+        data_type: VARCHAR
+      - name: DIM_ACCOUNT_SK
+        expr: DIM_ACCOUNT_SK
+        data_type: NUMBER
+      - name: DIM_CUSTOMER_SK
+        expr: DIM_CUSTOMER_SK
+        data_type: NUMBER
+      - name: TRANSACTION_TIME
+        expr: TRANSACTION_TIME
+        data_type: VARCHAR
+      - name: TRANSACTION_TYPE
+        expr: TRANSACTION_TYPE
+        data_type: VARCHAR
+      - name: AMOUNT
+        expr: AMOUNT
+        data_type: NUMBER
+      - name: CURRENCY
+        expr: CURRENCY
+        data_type: VARCHAR
+      - name: DIRECTION
+        expr: DIRECTION
+        data_type: VARCHAR
+      - name: CHANNEL
+        expr: CHANNEL
+        data_type: VARCHAR
+      - name: ORIGINATOR_NAME
+        expr: ORIGINATOR_NAME
+        data_type: VARCHAR
+      - name: ORIGINATOR_COUNTRY
+        expr: ORIGINATOR_COUNTRY
+        data_type: VARCHAR
+      - name: BENEFICIARY_NAME
+        expr: BENEFICIARY_NAME
+        data_type: VARCHAR
+      - name: BENEFICIARY_COUNTRY
+        expr: BENEFICIARY_COUNTRY
+        data_type: VARCHAR
+      - name: BENEFICIARY_BANK
+        expr: BENEFICIARY_BANK
+        data_type: VARCHAR
+      - name: PURPOSE_CODE
+        expr: PURPOSE_CODE
+        data_type: VARCHAR
+      - name: HAS_AML_FLAG
+        expr: HAS_AML_FLAG
+        data_type: BOOLEAN
+        description: Indicates whether this transaction triggered an AML alert during screening.
+      - name: AML_ALERT_TYPE
+        expr: AML_ALERT_TYPE
+        data_type: VARCHAR
+        description: Category of AML alert triggered such as structuring, unusual pattern, or sanctions match.
+      - name: RISK_SCORE
+        expr: RISK_SCORE
+        data_type: NUMBER
+        description: Numeric risk score assigned to the transaction from 0 (low risk) to 100 (high risk).
+      - name: SCREENING_STATUS
+        expr: SCREENING_STATUS
+        data_type: VARCHAR
+        description: 'Current status of sanctions/PEP screening: PENDING, CLEARED, or ESCALATED.'
+      - name: IS_CASH
+        expr: IS_CASH
+        data_type: BOOLEAN
+      - name: IS_CTR_FILED
+        expr: IS_CTR_FILED
+        data_type: BOOLEAN
+        description: True when a Currency Transaction Report was filed for this transaction.
+      - name: IS_CROSS_BORDER
+        expr: IS_CROSS_BORDER
+        data_type: BOOLEAN
+        description: True when originator and beneficiary are in different countries.
+      - name: IS_LARGE_TRANSACTION
+        expr: IS_LARGE_TRANSACTION
+        data_type: BOOLEAN
+        description: True when the transaction amount exceeds the regulatory reporting threshold.
+      - name: TRANSACTION_DATE_SK
+        expr: TRANSACTION_DATE_SK
+        data_type: NUMBER
+    time_dimensions:
+      - name: TRANSACTION_DATE
+        expr: TRANSACTION_DATE
+        data_type: DATE
+      - name: TRANSACTION_TIMESTAMP
+        expr: TRANSACTION_TIMESTAMP
+        data_type: TIMESTAMP_NTZ
+    description: Records individual financial transactions at the transaction level. Each row represents one completed transaction with AML screening results, risk scoring, and cross-border indicators.
+    metrics:
+      - name: TOTAL_AMOUNT
+        description: Total transaction amount aggregated across transactions.
+        expr: SUM(AMOUNT)
+      - name: TRANSACTION_COUNT
+        description: Count of transactions.
+        expr: COUNT(TRANSACTION_ID)
+      - name: AVG_RISK_SCORE
+        description: Average transaction risk score.
+        expr: AVG(RISK_SCORE)
+      - name: FLAGGED_TRANSACTION_COUNT
+        description: Count of transactions with AML flags.
+        expr: SUM(CASE WHEN HAS_AML_FLAG THEN 1 ELSE 0 END)
+  - name: DIM_CUSTOMER
+    base_table:
+      database: RISK_DB
+      schema: CURATED
+      table: DIM_CUSTOMER
+    primary_key:
+      columns:
+        - DIM_CUSTOMER_SK
+    dimensions:
+      - name: DIM_CUSTOMER_SK
+        expr: DIM_CUSTOMER_SK
+        data_type: NUMBER
+      - name: CUSTOMER_ID
+        expr: CUSTOMER_ID
+        data_type: VARCHAR
+      - name: FULL_NAME
+        expr: FULL_NAME
+        data_type: VARCHAR
+      - name: NATIONALITY
+        expr: NATIONALITY
+        data_type: VARCHAR
+      - name: COUNTRY_OF_RESIDENCE
+        expr: COUNTRY_OF_RESIDENCE
+        data_type: VARCHAR
+      - name: CUSTOMER_TYPE
+        expr: CUSTOMER_TYPE
+        data_type: VARCHAR
+      - name: INDUSTRY
+        expr: INDUSTRY
+        data_type: VARCHAR
+      - name: RISK_RATING
+        expr: RISK_RATING
+        data_type: VARCHAR
+        description: 'Customer risk classification: LOW, MEDIUM, HIGH, or VERY HIGH.'
+      - name: KYC_STATUS
+        expr: KYC_STATUS
+        data_type: VARCHAR
+        description: 'Current KYC verification status: VERIFIED, PENDING, EXPIRED, or REJECTED.'
+      - name: PEP_FLAG
+        expr: PEP_FLAG
+        data_type: BOOLEAN
+        description: True if customer is identified as a Politically Exposed Person.
+      - name: SANCTIONS_MATCH_FLAG
+        expr: SANCTIONS_MATCH_FLAG
+        data_type: BOOLEAN
+        description: True if the customer name matched an entry on a sanctions watchlist.
+      - name: ANNUAL_INCOME
+        expr: ANNUAL_INCOME
+        data_type: NUMBER
+      - name: SOURCE_OF_FUNDS
+        expr: SOURCE_OF_FUNDS
+        data_type: VARCHAR
+      - name: IS_HIGH_RISK
+        expr: IS_HIGH_RISK
+        data_type: BOOLEAN
+        description: True if the customer is classified as high or very high risk.
+      - name: IS_CURRENT
+        expr: IS_CURRENT
+        data_type: BOOLEAN
+    time_dimensions:
+      - name: KYC_LAST_REVIEWED
+        expr: KYC_LAST_REVIEWED
+        data_type: DATE
+      - name: ONBOARDING_DATE
+        expr: ONBOARDING_DATE
+        data_type: DATE
+    unique_keys:
+      - columns:
+          - CUSTOMER_ID
+    description: Customer master dimension containing KYC profiles and risk classifications. Each row represents one customer with their current PEP status, sanctions match flags, and risk rating.
+  - name: DIM_ACCOUNT
+    base_table:
+      database: RISK_DB
+      schema: CURATED
+      table: DIM_ACCOUNT
+    primary_key:
+      columns:
+        - DIM_ACCOUNT_SK
+    dimensions:
+      - name: DIM_ACCOUNT_SK
+        expr: DIM_ACCOUNT_SK
+        data_type: NUMBER
+      - name: ACCOUNT_ID
+        expr: ACCOUNT_ID
+        data_type: VARCHAR
+      - name: CUSTOMER_ID
+        expr: CUSTOMER_ID
+        data_type: VARCHAR
+      - name: ACCOUNT_TYPE
+        expr: ACCOUNT_TYPE
+        data_type: VARCHAR
+      - name: CURRENCY
+        expr: CURRENCY
+        data_type: VARCHAR
+      - name: STATUS
+        expr: STATUS
+        data_type: VARCHAR
+      - name: BRANCH_CODE
+        expr: BRANCH_CODE
+        data_type: VARCHAR
+      - name: COUNTRY
+        expr: COUNTRY
+        data_type: VARCHAR
+      - name: BALANCE
+        expr: BALANCE
+        data_type: NUMBER
+      - name: RISK_SCORE
+        expr: RISK_SCORE
+        data_type: NUMBER
+      - name: DAYS_SINCE_LAST_ACTIVITY
+        expr: DAYS_SINCE_LAST_ACTIVITY
+        data_type: NUMBER
+      - name: IS_DORMANT
+        expr: IS_DORMANT
+        data_type: BOOLEAN
+      - name: IS_OVERDRAWN
+        expr: IS_OVERDRAWN
+        data_type: BOOLEAN
+      - name: IS_CURRENT
+        expr: IS_CURRENT
+        data_type: BOOLEAN
+    description: Account dimension with current balance and activity status. Each row represents one bank account with dormancy indicators, overdraft status, and risk scoring.
+  - name: DIM_SANCTIONS
+    base_table:
+      database: RISK_DB
+      schema: CURATED
+      table: DIM_SANCTIONS
+    dimensions:
+      - name: DIM_SANCTIONS_SK
+        expr: DIM_SANCTIONS_SK
+        data_type: NUMBER
+      - name: WATCHLIST_ID
+        expr: WATCHLIST_ID
+        data_type: VARCHAR
+      - name: ENTITY_NAME
+        expr: ENTITY_NAME
+        data_type: VARCHAR
+      - name: ENTITY_TYPE
+        expr: ENTITY_TYPE
+        data_type: VARCHAR
+      - name: SOURCE_LIST
+        expr: SOURCE_LIST
+        data_type: VARCHAR
+      - name: COUNTRY
+        expr: COUNTRY
+        data_type: VARCHAR
+      - name: REASON
+        expr: REASON
+        data_type: VARCHAR
+      - name: STATUS
+        expr: STATUS
+        data_type: VARCHAR
+      - name: MATCH_SCORE_THRESHOLD
+        expr: MATCH_SCORE_THRESHOLD
+        data_type: NUMBER
+      - name: DAYS_ON_LIST
+        expr: DAYS_ON_LIST
+        data_type: NUMBER
+      - name: IS_CURRENT
+        expr: IS_CURRENT
+        data_type: BOOLEAN
+    time_dimensions:
+      - name: DATE_LISTED
+        expr: DATE_LISTED
+        data_type: DATE
+    description: Sanctions watchlist reference containing entities flagged by regulatory bodies. Each row represents one sanctioned entity with source list, country, and listing reason.
+  - name: DIM_PEP
+    base_table:
+      database: RISK_DB
+      schema: CURATED
+      table: DIM_PEP
+    dimensions:
+      - name: DIM_PEP_SK
+        expr: DIM_PEP_SK
+        data_type: NUMBER
+      - name: PEP_ID
+        expr: PEP_ID
+        data_type: VARCHAR
+      - name: FULL_NAME
+        expr: FULL_NAME
+        data_type: VARCHAR
+      - name: POSITION
+        expr: POSITION
+        data_type: VARCHAR
+      - name: COUNTRY
+        expr: COUNTRY
+        data_type: VARCHAR
+      - name: PEP_TIER
+        expr: PEP_TIER
+        data_type: VARCHAR
+      - name: RELATIONSHIP_TYPE
+        expr: RELATIONSHIP_TYPE
+        data_type: VARCHAR
+      - name: STATUS
+        expr: STATUS
+        data_type: VARCHAR
+      - name: SOURCE
+        expr: SOURCE
+        data_type: VARCHAR
+      - name: DAYS_ON_LIST
+        expr: DAYS_ON_LIST
+        data_type: NUMBER
+      - name: IS_CURRENT
+        expr: IS_CURRENT
+        data_type: BOOLEAN
+    time_dimensions:
+      - name: DATE_ADDED
+        expr: DATE_ADDED
+        data_type: DATE
+    description: Politically Exposed Persons reference list. Each row represents one PEP entry with tier classification, position held, and relationship type.
+relationships:
+  - name: FCT_TRANSACTION_TO_DIM_CUSTOMER
+    left_table: FCT_TRANSACTION
+    right_table: DIM_CUSTOMER
+    join_type: inner
+    relationship_type: many_to_one
+    relationship_columns:
+      - left_column: DIM_CUSTOMER_SK
+        right_column: DIM_CUSTOMER_SK
+  - name: FCT_TRANSACTION_TO_DIM_ACCOUNT
+    left_table: FCT_TRANSACTION
+    right_table: DIM_ACCOUNT
+    join_type: inner
+    relationship_columns:
+      - left_column: DIM_ACCOUNT_SK
+        right_column: DIM_ACCOUNT_SK
+verified_queries:
+  - name: 0;1
+    question: What are the AML alert counts and amounts by transaction type and alert type?
+    sql: SELECT t.TRANSACTION_TYPE, t.AML_ALERT_TYPE, COUNT(*) AS alert_count, SUM(t.AMOUNT) AS total_amount FROM fct_transaction AS t WHERE t.HAS_AML_FLAG = TRUE GROUP BY t.TRANSACTION_TYPE, t.AML_ALERT_TYPE
+    verified_at: 1787803919
+    verified_by: Semantic Model Generator
+  - name: 1;1
+    question: Which customers have the highest total amounts in flagged transactions?
+    sql: SELECT c.FULL_NAME, c.RISK_RATING, COUNT(t.TRANSACTION_ID) AS txn_count, SUM(t.AMOUNT) AS total_amount FROM fct_transaction AS t JOIN dim_customer AS c ON t.DIM_CUSTOMER_SK = c.DIM_CUSTOMER_SK WHERE t.HAS_AML_FLAG = TRUE AND c.IS_CURRENT = TRUE GROUP BY c.FULL_NAME, c.RISK_RATING ORDER BY total_amount DESC
+    verified_at: 1787803919
+    verified_by: Semantic Model Generator
+  - name: 2;1
+    question: Which countries have the highest value of high-risk cross-border transactions?
+    sql: SELECT t.BENEFICIARY_COUNTRY, COUNT(*) AS cross_border_count, SUM(t.AMOUNT) AS total_amount FROM fct_transaction AS t WHERE t.IS_CROSS_BORDER = TRUE AND t.RISK_SCORE > 70 GROUP BY t.BENEFICIARY_COUNTRY ORDER BY total_amount DESC
+    verified_at: 1787803919
+    verified_by: Semantic Model Generator
