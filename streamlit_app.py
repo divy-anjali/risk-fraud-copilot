@@ -1,6 +1,32 @@
 import streamlit as st
 import pandas as pd
-import snowflake.connector
+
+# Dual-mode connection: inside Streamlit-in-Snowflake use the active session;
+# for local development fall back to a named connection from connections.toml.
+LOCAL_CONNECTION_NAME = "qbgiwtu-dk32675"
+
+
+@st.cache_resource
+def get_session():
+    """Return the active Snowpark session when running in Snowflake, else None."""
+    try:
+        from snowflake.snowpark.context import get_active_session
+
+        return get_active_session()
+    except Exception:
+        return None
+
+
+@st.cache_resource
+def get_local_connection():
+    """Local fallback: a snowflake.connector connection via connections.toml."""
+    import snowflake.connector
+
+    return snowflake.connector.connect(
+        connection_name=LOCAL_CONNECTION_NAME,
+        client_store_temporary_credential=True,
+    )
+
 
 st.set_page_config(
     page_title="Risk & Fraud Copilot",
@@ -9,21 +35,16 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-
-@st.cache_resource
-def get_connection():
-    return snowflake.connector.connect(
-        connection_name="hmxhrph-kh35929",
-        client_store_temporary_credential=True,
-    )
-
-
-sf_conn = get_connection()
+_SESSION = get_session()
 
 
 @st.cache_data(ttl=300)
 def run_query(sql: str) -> pd.DataFrame:
-    cur = sf_conn.cursor()
+    if _SESSION is not None:
+        # Streamlit-in-Snowflake: run through the Snowpark session.
+        return _SESSION.sql(sql).to_pandas()
+    # Local: run through a cursor and build the DataFrame by hand.
+    cur = get_local_connection().cursor()
     cur.execute(sql)
     cols = [desc[0] for desc in cur.description]
     rows = cur.fetchall()
