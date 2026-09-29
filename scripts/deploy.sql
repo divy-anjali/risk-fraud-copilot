@@ -73,3 +73,9 @@
 
 -- 11. Semantics layer - Semantic Views (deploy via cortex CLI or CREATE SEMANTIC VIEW)
 -- cortex semantic-views deploy --manifest semantics/risk-fraud-copilot.yaml
+
+-- 12. Semantics layer - Cortex Search Service over policy documents
+-- !source semantics/policy_search.sql
+
+-- 13. Semantics layer - Cortex Agent (depends on the 4 semantic views + policy_search)
+-- !source semantics/risk_fraud_copilot.agent.sql

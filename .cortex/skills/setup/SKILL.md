@@ -349,6 +349,39 @@ SHOW SEMANTIC VIEWS IN SCHEMA RISK_DB.SEMANTICS;
 
 ---
 
+### Step 14: Deploy the Cortex Search Service
+
+Execute the contents of `semantics/policy_search.sql`. It indexes `REF_POLICY_DOCUMENTS.FULL_CONTENT` for the agent's `policy_search` tool.
+
+```sql
+USE SCHEMA RISK_DB.SEMANTICS;
+CREATE OR REPLACE CORTEX SEARCH SERVICE POLICY_SEARCH
+  ON FULL_CONTENT
+  ATTRIBUTES POLICY_NAME, CLASSIFICATION
+  WAREHOUSE = COMPUTE_WH
+  TARGET_LAG = '1 hour'
+  AS (SELECT POLICY_ID, POLICY_NAME, CLASSIFICATION, PURPOSE, FULL_CONTENT
+      FROM RISK_DB.CURATED.REF_POLICY_DOCUMENTS);
+```
+
+Note: the `ON` clause takes a bare column name, not a qualified table (a qualified name fails with `unexpected '.'`). `USE SCHEMA` first.
+
+**CHECKPOINT**: `SHOW CORTEX SEARCH SERVICES IN SCHEMA RISK_DB.SEMANTICS` shows `POLICY_SEARCH` with `indexing_state` and `serving_state` = ACTIVE and `source_data_num_rows` = 6.
+
+---
+
+### Step 15: Deploy the Cortex Agent
+
+Execute the contents of `semantics/risk_fraud_copilot.agent.sql`. It creates `RISK_DB.SEMANTICS.RISK_FRAUD_COPILOT` wiring the 4 semantic views as `cortex_analyst_text_to_sql` tools plus `POLICY_SEARCH` as a `cortex_search` tool, with a Signal -> Evidence -> Finding response style.
+
+Notes:
+- Use the plain `$$` delimiter for `FROM SPECIFICATION`. The labelled `$spec$` form fails to parse.
+- Depends on Steps 13 and 14 being complete.
+
+**CHECKPOINT**: `DESCRIBE AGENT RISK_DB.SEMANTICS.RISK_FRAUD_COPILOT` returns a spec with 5 tools whose `tool_resources` reference the 4 semantic views and `POLICY_SEARCH`. Agents cannot be invoked from SQL; test conversationally in Snowsight > AI & ML > Agents.
+
+---
+
 ## Done
 
 The full Risk Fraud Copilot platform is live:
