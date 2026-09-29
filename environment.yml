@@ -4,4 +4,5 @@ channels:
 dependencies:
   - streamlit
   - pandas
+  - altair
   - snowflake-snowpark-python
