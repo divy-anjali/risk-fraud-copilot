@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Virtual environments
+.venv/
+venv/
+
+# Streamlit local secrets (never commit credentials/connection config)
+.streamlit/secrets.toml
+
+# OS / editor
+.DS_Store
+Thumbs.db
