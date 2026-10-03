@@ -1,6 +1,6 @@
 ---
 name: setup
-description: "Run initial setup of the Risk Fraud Copilot project from scratch or update an existing deployment. Creates warehouse, database, schemas, file formats, stages, raw tables, stored procedures, generates sample data, loads it, builds the curated star schema (sequences, views, dimension/fact tables, SCD2 load procedures), populates the curated layer, sets up the incremental ingestion pipeline (stream + task), and deploys semantic views for Cortex Analyst. Handles migrations from older naming conventions and schema changes. Use when: setting up the project in a new Snowflake account, re-deploying from scratch, updating an existing environment, or onboarding a new environment."
+description: "Run initial setup of the Risk Fraud Copilot project from scratch or update an existing deployment. Creates warehouse, database, schemas, file formats, stages, raw tables, stored procedures, generates sample data, loads it, builds the curated star schema (sequences, views, dimension/fact tables, SCD2 load procedures), populates the curated layer, sets up the incremental ingestion pipeline (stream + task), deploys the 4 semantic views for Cortex Analyst, the POLICY_SEARCH Cortex Search service, the RISK_FRAUD_COPILOT Cortex Agent, and the AML_CUSTOMER_360 Streamlit-in-Snowflake app. Handles migrations from older naming conventions and schema changes. Use when: setting up the project in a new Snowflake account, re-deploying from scratch, updating an existing environment, deploying the Streamlit app or Cortex agent, or onboarding a new environment."
 user_invocable: true
 ---
 
@@ -11,8 +11,31 @@ Provision the entire Risk Fraud Copilot environment from zero to a fully operati
 ## Architecture
 
 ```
-Infrastructure → RAW (Landing) → CURATED (Star Schema) → SEMANTICS (Semantic Views)
+Infrastructure → RAW (Landing) → CURATED (Star Schema) → SEMANTICS (Semantic Views, Search, Agent) → Streamlit App
 ```
+
+## Pre-flight: Writes Must Be Allowed
+
+This skill creates objects, so the session must permit DDL. If Cortex Code's
+**read-only toggle** is on, a Restricted Session Scope blocks every `CREATE` with:
+
+```
+Insufficient privileges to operate on account '<account>'.
+Restricted session scope: USER SPECIFIED does not include CREATE ... access
+```
+
+There is **no SQL workaround** — the toggle must be turned off before continuing.
+To confirm what the current session allows:
+
+```sql
+SELECT SYS_CONTEXT('SNOWFLAKE$SESSION', 'ACTIVE_RESTRICTED_SESSION_SCOPES');
+```
+
+If the result lists only data-read / usage / object-discovery scopes, stop and ask the
+user to turn the read-only toggle off, then re-check before running any step below.
+
+Also confirm the role can create account-level objects (warehouse, database) —
+`ACCOUNTADMIN` or equivalent.
 
 ## Pre-flight: Detect Existing State
 
@@ -57,7 +80,11 @@ DROP PROCEDURE IF EXISTS RISK_DB.RAW.LOAD_NEW_CSV_FILES();
    - All `CREATE OR REPLACE PROCEDURE` statements
    - All `CREATE OR REPLACE VIEW` statements
    - All `CREATE OR REPLACE STREAM` statements
-   - Semantic views via `CREATE OR REPLACE SEMANTIC VIEW`
+   - Semantic views via `SYSTEM$CREATE_SEMANTIC_VIEW_FROM_YAML` — see Step 13.
+     (Re-running it replaces the view and copies grants. Pass `TRUE` for the 4th
+     argument, `create_or_alter`, to preserve existing materializations where possible.)
+   - Cortex Search service and Agent — see Steps 14 and 15.
+   - Streamlit app — see Step 16.
 
 6. **Resume tasks** after changes are complete:
 ```sql
@@ -93,7 +120,7 @@ Read each file and execute the SQL.
 
 ### Step 2: Create Raw Tables
 
-Execute all 8 table DDLs from `raw/tables/`:
+Execute all 9 table DDLs from `raw/tables/`:
 - `customer_master.sql`
 - `account_master.sql`
 - `loan_master.sql`
@@ -102,10 +129,14 @@ Execute all 8 table DDLs from `raw/tables/`:
 - `deposit_balances.sql`
 - `pep_list.sql`
 - `sanctions_watchlist.sql`
+- `policy_documents.sql`
 
 Read each file and execute the SQL. All tables include `_SOURCE_FILE STRING` and `_LOADED_AT TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()` audit columns.
 
-**CHECKPOINT**: `SHOW TABLES IN SCHEMA RISK_DB.RAW` should return 8 tables.
+`POLICY_DOCUMENTS` is required — it holds the parsed policy PDF text that
+`REF_POLICY_DOCUMENTS` and the `POLICY_SEARCH` service (Step 14) are built from.
+
+**CHECKPOINT**: `SHOW TABLES IN SCHEMA RISK_DB.RAW` should return 9 tables.
 
 ---
 
@@ -318,29 +349,64 @@ SHOW TASKS IN SCHEMA RISK_DB.RAW;
 
 ### Step 13: Deploy Semantic Views
 
-Deploy all 4 semantic views from the `semantics/` directory using the manifest at `semantics/risk-fraud-copilot.yaml`.
+Deploy all 4 semantic views from the `semantics/` directory using the
+`SYSTEM$CREATE_SEMANTIC_VIEW_FROM_YAML` stored procedure.
 
-Run:
-```bash
-cortex semantic-views deploy --manifest semantics/risk-fraud-copilot.yaml
+**Key point:** the first argument is the **schema path only** (`RISK_DB.SEMANTICS`).
+The semantic view's name is taken from the `name:` field *inside* the YAML — you do
+not pass the object name. If a view of that name already exists, the procedure
+replaces it and copies grants (equivalent to `CREATE OR REPLACE ... COPY GRANTS`).
+
+Do **not** use `CREATE OR REPLACE SEMANTIC VIEW <name> AS $$ <yaml> $$` — that is not
+valid syntax. Do not rely on a `cortex` / `snow` CLI either; it is not guaranteed to be
+installed (and is absent on the current dev machine).
+
+For each of the 4 files in `semantics/*.sv.yaml`:
+
+1. Read the file contents.
+2. **Validate first** (optional but recommended) by passing `TRUE` for `verify_only`.
+   This checks the spec without creating anything:
+
+```sql
+CALL SYSTEM$CREATE_SEMANTIC_VIEW_FROM_YAML(
+  'RISK_DB.SEMANTICS',
+  $$
+  <paste the full YAML file contents here>
+  $$,
+  TRUE
+);
 ```
 
-If the CLI deploy is not available, read each `.sv.yaml` file and deploy using `CREATE OR REPLACE SEMANTIC VIEW` DDL:
+   Expect: `YAML file is valid for creating a semantic view. No object has been created yet.`
 
-| Semantic View File | Target Object |
-|--------------------|---------------|
+3. Create it by omitting `verify_only` (or passing `FALSE`):
+
+```sql
+CALL SYSTEM$CREATE_SEMANTIC_VIEW_FROM_YAML(
+  'RISK_DB.SEMANTICS',
+  $$
+  <paste the full YAML file contents here>
+  $$
+);
+```
+
+   Expect: `Semantic view was successfully created.`
+
+Use the `$$` dollar-quoted form for the YAML — the specs contain quotes, colons and
+newlines that would otherwise need escaping.
+
+Expected result — each file produces this object (the name comes from the YAML, so it
+is listed here as the outcome to verify, not as an argument to supply):
+
+| Semantic View File | Resulting Object |
+|--------------------|------------------|
 | `risk_fraud_signals.sv.yaml` | `RISK_DB.SEMANTICS.RISK_FRAUD_SIGNALS` |
 | `regulatory_reporting.sv.yaml` | `RISK_DB.SEMANTICS.REGULATORY_REPORTING` |
 | `transaction_account_360.sv.yaml` | `RISK_DB.SEMANTICS.TRANSACTION_ACCOUNT_360` |
 | `investigation_facts.sv.yaml` | `RISK_DB.SEMANTICS.INVESTIGATION_FACTS` |
 
-For each file, read the YAML content and execute:
-```sql
-CREATE OR REPLACE SEMANTIC VIEW <target_object>
-  AS $$
-  <yaml_content>
-  $$;
-```
+The manifest at `semantics/risk-fraud-copilot.yaml` lists these same file-to-object
+mappings and is the source of truth if the set of views changes.
 
 **CHECKPOINT**: Verify all 4 semantic views exist:
 ```sql
@@ -382,13 +448,46 @@ Notes:
 
 ---
 
+### Step 16: Deploy the Streamlit App
+
+Deploy `streamlit_app.py` as a Streamlit-in-Snowflake app. Run from the project root:
+
+```bash
+.venv\Scripts\python.exe scripts\deploy_streamlit.py
+```
+
+The script PUTs `streamlit_app.py` and `environment.yml` to
+`RISK_DB.SEMANTICS.STREAMLIT_STAGE`, creates (or replaces)
+`RISK_DB.SEMANTICS.AML_CUSTOMER_360` with `QUERY_WAREHOUSE = COMPUTE_WH`, then runs
+`ALTER STREAMLIT ... ADD LIVE VERSION FROM LAST`.
+
+Notes:
+- `environment.yml` must list `altair` — `streamlit_app.py` imports it at module level
+  for the chart helpers. Omitting it risks an import failure in the warehouse runtime.
+- Depends on Steps 13 and 14: the app's **Ask the Copilot** page queries the semantic
+  views via the Cortex Analyst REST API, and the **Investigation & Report Builder** page
+  calls `POLICY_SEARCH` through `SNOWFLAKE.CORTEX.SEARCH_PREVIEW`.
+- The app also runs locally for development (`python -m streamlit run streamlit_app.py`),
+  using the named connection in `connections.toml` instead of the active SiS session.
+- Snowsight caches the previous build — hard-refresh after redeploying.
+
+**CHECKPOINT**: `SHOW STREAMLITS IN SCHEMA RISK_DB.SEMANTICS` returns `AML_CUSTOMER_360`
+(title `Risk & Fraud Copilot`) with a non-null `url_id`. Open it in Snowsight and confirm
+the landing page renders 4 navigation cards.
+
+---
+
 ## Done
 
 The full Risk Fraud Copilot platform is live:
 
-- **RAW layer**: 8 tables with sample data, auto-ingestion pipeline (stage stream + task)
+- **RAW layer**: 9 tables with sample data, auto-ingestion pipeline (stage stream + 9 CDC table streams + 5-minute task)
 - **CURATED layer**: Star schema with 5 SCD2 dimensions, 3 fact tables, 1 reference table, 1 date dimension
-- **SEMANTICS layer**: 4 semantic views for Cortex Analyst covering risk/fraud signals, regulatory reporting, transaction/account 360, and investigation facts
+- **SEMANTICS layer**:
+  - 4 semantic views for Cortex Analyst covering risk/fraud signals, regulatory reporting, transaction/account 360, and investigation facts
+  - `POLICY_SEARCH` Cortex Search service over the policy documents
+  - `RISK_FRAUD_COPILOT` Cortex Agent wiring all 4 views plus policy search as 5 tools
+- **App layer**: `AML_CUSTOMER_360` Streamlit-in-Snowflake app (Risk Overview, Ask the Copilot, Customer 360, Investigation & Report Builder)
 
 ### Ongoing Operations
 
@@ -401,9 +500,19 @@ ALTER STAGE RISK_DB.RAW.RISK_FRAUD_DATA_STAGE REFRESH;
 CALL RISK_DB.CURATED.SP_REFRESH_CURATED_LAYER();
 ```
 
-To query via Cortex Analyst:
-```bash
-cortex analyst query "Show me high-risk transactions from the last 30 days" --view=RISK_DB.SEMANTICS.RISK_FRAUD_SIGNALS
+To ask questions of the data (there is no `cortex analyst query` CLI — use one of these):
+
+- **Full agent, conversationally**: Snowsight > AI & ML > Agents > `RISK_FRAUD_COPILOT`.
+  This is the only place the 5-tool agent orchestrates across all views plus policy search.
+- **In the app**: the **Ask the Copilot** page of `AML_CUSTOMER_360`, which calls the
+  Cortex Analyst REST API (`/api/v2/cortex/analyst/message`) against one selected
+  semantic view and displays the generated SQL.
+- **Policy text, from SQL**:
+```sql
+SELECT SNOWFLAKE.CORTEX.SEARCH_PREVIEW(
+  'RISK_DB.SEMANTICS.POLICY_SEARCH',
+  '{"query": "structuring thresholds", "columns": ["POLICY_NAME","FULL_CONTENT"], "limit": 2}'
+);
 ```
 
 ---
