@@ -17,6 +17,10 @@ COMPLETE_MODEL = "llama3.1-70b"
 
 ANALYST_ENDPOINT = "/api/v2/cortex/analyst/message"
 
+# Cortex AI calls (Analyst questions, finding narratives) are billed outside the
+# warehouse resource monitor, so the public hosted deployment caps them per session.
+PUBLIC_CORTEX_CALL_LIMIT = 20
+
 # Cortex Analyst domains -> semantic view. Ask-the-Copilot queries one view per turn.
 ANALYST_DOMAINS = {
     "Fraud & AML signals": "RISK_DB.SEMANTICS.RISK_FRAUD_SIGNALS",
@@ -64,10 +68,39 @@ def get_session():
         return None
 
 
+def _secrets_config():
+    """The [snowflake] section of st.secrets (hosted deployment), or None."""
+    try:
+        return dict(st.secrets["snowflake"])
+    except Exception:
+        return None
+
+
 @st.cache_resource
 def get_local_connection():
-    """Local fallback: a snowflake.connector connection via connections.toml."""
+    """Fallback connection when not running inside Snowflake.
+
+    Hosted (e.g. Streamlit Community Cloud): key-pair auth from the [snowflake]
+    section of st.secrets. Local development: a named connection from
+    connections.toml.
+    """
     import snowflake.connector
+
+    # `?` placeholders, matching Snowpark's session.sql(params=...), so run_query
+    # binds the same way in both modes.
+    snowflake.connector.paramstyle = "qmark"
+
+    cfg = _secrets_config()
+    if cfg:
+        from cryptography.hazmat.primitives import serialization
+
+        key = serialization.load_pem_private_key(cfg.pop("private_key").encode(), password=None)
+        cfg["private_key"] = key.private_bytes(
+            serialization.Encoding.DER,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        )
+        return snowflake.connector.connect(**cfg)
 
     return snowflake.connector.connect(
         connection_name=LOCAL_CONNECTION_NAME,
@@ -85,13 +118,14 @@ _SESSION = get_session()
 
 
 @st.cache_data(ttl=300)
-def run_query(sql: str) -> pd.DataFrame:
+def run_query(sql: str, params: tuple | None = None) -> pd.DataFrame:
+    """Run SQL; `params` are bound to `?` placeholders (never string-formatted)."""
     if _SESSION is not None:
         # Streamlit-in-Snowflake: run through the Snowpark session.
-        return _SESSION.sql(sql).to_pandas()
+        return _SESSION.sql(sql, params=list(params) if params else None).to_pandas()
     # Local: run through a cursor and build the DataFrame by hand.
     cur = get_local_connection().cursor()
-    cur.execute(sql)
+    cur.execute(sql, params)
     cols = [desc[0] for desc in cur.description]
     rows = cur.fetchall()
     return pd.DataFrame(rows, columns=cols)
@@ -197,15 +231,27 @@ def bar_chart(df, x, y, x_title, y_title, sort="-y", y_format=None, color=None,
 # ---------------------------------------------------------------------------
 # Cortex helpers
 # ---------------------------------------------------------------------------
-def _sql_literal(text: str) -> str:
-    """Escape a Python string for safe use inside a single-quoted SQL literal."""
-    return text.replace("'", "''")
+def cortex_budget_ok() -> bool:
+    """Count one Cortex AI call against the session cap; False once it is used up.
+
+    Only enforced on the public hosted deployment (credentials in st.secrets).
+    """
+    if _SESSION is not None or not _secrets_config():
+        return True
+    used = st.session_state.get("cortex_calls", 0)
+    if used >= PUBLIC_CORTEX_CALL_LIMIT:
+        st.warning(
+            f"This public demo allows {PUBLIC_CORTEX_CALL_LIMIT} AI requests per session, "
+            "and that limit has been reached."
+        )
+        return False
+    st.session_state["cortex_calls"] = used + 1
+    return True
 
 
 def cortex_complete(prompt: str, model: str = COMPLETE_MODEL) -> str:
     """Run SNOWFLAKE.CORTEX.COMPLETE via SQL (works in SiS and locally)."""
-    sql = f"SELECT SNOWFLAKE.CORTEX.COMPLETE('{model}', '{_sql_literal(prompt)}') AS RESPONSE"
-    df = run_query(sql)
+    df = run_query("SELECT SNOWFLAKE.CORTEX.COMPLETE(?, ?) AS RESPONSE", (model, prompt))
     return "" if df.empty else str(df["RESPONSE"].iloc[0])
 
 
@@ -215,12 +261,10 @@ def search_policies(query: str, limit: int = 3) -> pd.DataFrame:
     spec = json.dumps(
         {"query": query, "columns": ["POLICY_NAME", "CLASSIFICATION", "FULL_CONTENT"], "limit": limit}
     )
-    sql = f"""
-    SELECT SNOWFLAKE.CORTEX.SEARCH_PREVIEW(
-        'RISK_DB.SEMANTICS.POLICY_SEARCH', '{_sql_literal(spec)}'
-    ) AS PAYLOAD
-    """
-    df = run_query(sql)
+    df = run_query(
+        "SELECT SNOWFLAKE.CORTEX.SEARCH_PREVIEW('RISK_DB.SEMANTICS.POLICY_SEARCH', ?) AS PAYLOAD",
+        (spec,),
+    )
     if df.empty:
         return pd.DataFrame(columns=["POLICY_NAME", "CLASSIFICATION", "FULL_CONTENT"])
     return pd.DataFrame(json.loads(df["PAYLOAD"].iloc[0]).get("results", []))
@@ -706,7 +750,7 @@ def render_copilot():
         question = st.text_input("Your question", placeholder="Ask about your risk data...")
         submitted = st.form_submit_button("Ask")
 
-    if submitted and question.strip():
+    if submitted and question.strip() and cortex_budget_ok():
         with st.spinner("Cortex Analyst is thinking..."):
             interpretation, sql_text, suggestions, error = run_analyst(question.strip(), semantic_view)
         entry = {"q": question.strip(), "domain": domain, "interpretation": interpretation,
@@ -1054,7 +1098,7 @@ def render_report():
 
     st.header("4. Documented finding")
     findings = st.session_state.setdefault("findings", {})
-    if st.button("Generate finding narrative", key="report_generate"):
+    if st.button("Generate finding narrative", key="report_generate") and cortex_budget_ok():
         facts = f"""Customer: {profile['FULL_NAME']} ({inv_id})
 Risk rating: {profile['RISK_RATING']}; High-risk flag: {bool(profile['IS_HIGH_RISK'])}
 KYC status: {profile['KYC_STATUS']}; PEP: {bool(profile['PEP_FLAG'])}; Sanctions match: {bool(profile['SANCTIONS_MATCH_FLAG'])}

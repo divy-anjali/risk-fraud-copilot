@@ -12,6 +12,10 @@ venv/
 # Streamlit local secrets (never commit credentials/connection config)
 .streamlit/secrets.toml
 
+# Private keys
+*.p8
+*.pem
+
 # OS / editor
 .DS_Store
 Thumbs.db
