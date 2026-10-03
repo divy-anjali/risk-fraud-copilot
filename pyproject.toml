@@ -8,3 +8,8 @@ dependencies = [
     "snowflake-snowpark-python>=1.54.0",
     "streamlit>=1.62.0",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+]
